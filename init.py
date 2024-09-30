@@ -5,11 +5,24 @@ import matplotlib.pyplot as plt
 import os
 import re
 
+import numpy as np
+
 
 BASE_DIRECTORY = os.path.curdir
 DATA_DIRECTORY = os.path.join(BASE_DIRECTORY,"data")
 CAMERA_FILE = os.path.join(DATA_DIRECTORY,"camera.dat")
+WORLD_FILE = os.path.join(DATA_DIRECTORY, "world.dat")
 MEAS_REGEX = r"^meas-.*\.dat$"
+
+def world_from_file(world_path) -> dict:
+    world = {}
+    with open(world_path, 'r') as world_file:
+        for line in world_file:
+            if line.strip() == "":
+                continue
+            p_id, *position = line.strip().split()
+            world[int(p_id)] = [float(p) for p in position]
+    return world
 
 def main():
 
@@ -23,7 +36,14 @@ def main():
         for filename in meas_files
     ]
 
+    world = world_from_file(WORLD_FILE)
     camera = CameraModel.from_file(CAMERA_FILE)
+
+    triangulated_points = camera.triangulate_two_observations(observations[0],observations[1])
+
+    for p_id in sorted(triangulated_points.keys()):
+        print("W:\t",p_id," -> ", world[p_id])
+        print("T:\t",p_id," -> ",triangulated_points[p_id])
 
 
 if __name__ == "__main__":
