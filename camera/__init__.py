@@ -1,1 +1,1 @@
-from .cameramodel import CameraModel
+from .cameramodel import *

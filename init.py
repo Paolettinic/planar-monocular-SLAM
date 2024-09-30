@@ -1,5 +1,5 @@
 from observation import Observation
-from camera import CameraModel
+import camera
 import matplotlib.pyplot as plt
 
 import os
@@ -37,9 +37,13 @@ def main():
     ]
 
     world = world_from_file(WORLD_FILE)
-    camera = CameraModel.from_file(CAMERA_FILE)
+    camera_model = camera.from_file(CAMERA_FILE)
 
-    triangulated_points = camera.triangulate_two_observations(observations[0],observations[1])
+    triangulated_points = camera.triangulate_two_observations(
+        camera_model,
+        observations[0],
+        observations[1]
+    )
 
     for p_id in sorted(triangulated_points.keys()):
         print("W:\t",p_id," -> ", world[p_id])
