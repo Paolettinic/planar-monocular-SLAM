@@ -1,4 +1,4 @@
-from observation import Observation
+import observation
 import camera
 import matplotlib.pyplot as plt
 
@@ -25,14 +25,13 @@ def world_from_file(world_path) -> dict:
     return world
 
 def main():
-
     meas_files = sorted([
         file for file in os.listdir(DATA_DIRECTORY)
         if re.match(MEAS_REGEX, file)
     ])
 
     observations = [
-        Observation.from_file(os.path.join(DATA_DIRECTORY, filename))
+        observation.from_file(os.path.join(DATA_DIRECTORY, filename))
         for filename in meas_files
     ]
 

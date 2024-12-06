@@ -1,45 +1,65 @@
-from observation import Observation
 import numpy as np
-from numpy.typing import NDArray
-from dataclasses import dataclass
-from utils.rotations import Rz
-from typing import Dict, List
 
-@dataclass
+from observation import Observation
+from numpy.typing import NDArray
+from utils.rotations import Rz
+from typing import Dict, List, Tuple
+from enum import Enum, auto
+
+
+class TriangulationMethod(Enum):
+    CONSECUTIVE_OBSERVATIONS = auto()
+    ALL_OBSERVATIONS = auto()
+
+
 class CameraModel:
-    camera_matrix: NDArray
-    cam_transform: NDArray
-    inv_cam_transform: NDArray
-    z_near: float
-    z_far: float
-    width: int
-    height: int
+    def __init__(
+        self,
+        calibration_matrix: NDArray,
+        cam_transform: NDArray,
+        z_near: float,
+        z_far: float,
+        width: int,
+        height: int
+    ) -> None:
+        self.calibration_matrix = calibration_matrix
+        self.cam_transform = cam_transform
+        #Inversion is performed just once, so it's acceptable
+        self.inv_cam_transform = np.linalg.inv(cam_transform)
+        self.z_near = z_near
+        self.z_far = z_far
+        self.width = width
+        self.height = height
 
 
     def get_projection_matrix(
         self,
-        position: tuple,
+        position: Tuple[float, ...],
         rotation: float
     ) -> NDArray:
         """
         Get the projection matrix given the position and the orientation
         Args:
-        - position: np.ndarray
-        - rotation: float
+        - position: `Tuple[float, float]`, (x, y) position of the robot
+        - rotation: `float`, rotation around z of the robot
         """
+        assert len(position) == 2
         R = Rz(rotation)
 
+        # Computing the inverse transformation, since [R|t] maps a point in the
+        # robot frame into the world frame.
         Rt = np.eye(4)
         Rt[:3, :3] = R.T
-        Rt[:3, 3] = -R.T @ np.array([*position,0])
+        Rt[:3, 3] = -R.T @ np.array([*position,0]) # 0 imposes planar motion
+
         T = (self.inv_cam_transform @ Rt)[:3, :]
-        return self.camera_matrix @ T
+        return self.calibration_matrix @ T
 
 
 def from_file(filepath: str) -> CameraModel:
     with open(filepath, "r") as file_p:
         next(file_p)
-        camera_matrix= np.array([
+        calibration_matrix= np.array([
             [
                 float(value)
                 for value in file_p.readline().strip().split()
@@ -60,16 +80,14 @@ def from_file(filepath: str) -> CameraModel:
         height = int(file_p.readline().split(":")[1].strip())
 
     return CameraModel(
-        camera_matrix=camera_matrix,
+        calibration_matrix=calibration_matrix,
         cam_transform=camera_transform,
-        inv_cam_transform=np.linalg.inv(camera_transform), # inversion is done just once, so it's accettable
         z_near=z_near,
         z_far=z_far,
         width=width,
         height=height
     )
-def triangulate_all_observations(camera_model: CameraModel, observations: List[Observation]) -> NDArray:
-    return np.array([])
+
 
 def triangulate_two_observations(
     camera_model: CameraModel,
@@ -81,16 +99,15 @@ def triangulate_two_observations(
     positions.
 
     Args:
-        camera_model (CameraModel): The camera model used to obtain projection
+        - camera_model: `CameraModel`, The camera model used to obtain projection
             matrices for each observation.
-        observation1 (Observation): The first observation
-        observation2 (Observation): The second observation
+        - observation1: `Observation`, The first observation
+        - observation2: `Observation`, The second observation
 
     Returns:
-        Dict[int, NDArray]: A dictionary where the keys are the point IDs
-        common to both observations and the values are the triangulated 3D
-        coordinates of those points.
-
+        - `Dict[int, NDArray]`: A dictionary where the keys are the point IDs common to
+            both observations and the values are the triangulated 3D coordinates of
+            those points.
     """
 
     proj_matrix1 = camera_model.get_projection_matrix(
@@ -110,6 +127,9 @@ def triangulate_two_observations(
         u1, v1 = observation1.points[point_id]
         u2, v2 = observation2.points[point_id]
 
+        # Solve the triangulation problem using SVD decomposition
+        # Computer Vision: Algorithms and Applications, Szeliski
+        # Chap. 7.1
         A = np.array([
             u1 * proj_matrix1[2, :] - proj_matrix1[0, :],
             v1 * proj_matrix1[2, :] - proj_matrix1[1, :],
@@ -124,4 +144,34 @@ def triangulate_two_observations(
     return triang_points
 
 
+def triangulate_all_observations(
+    camera_model: CameraModel,
+    observations: List[Observation]
+) -> Dict[int, NDArray]:
+    triang_points = dict()
+
+    return triang_points
+
+
+def triangulate_points(
+    camera_model: CameraModel,
+    observations: List[Observation],
+    method: TriangulationMethod = TriangulationMethod.CONSECUTIVE_OBSERVATIONS
+) -> Dict[int, NDArray]:
+    triang_points = dict()
+    if method == TriangulationMethod.CONSECUTIVE_OBSERVATIONS:
+        for i in range(len(observations)-1):
+            two_obs_points = triangulate_two_observations(
+                camera_model=camera_model,
+                observation1=observations[i],
+                observation2=observations[i+1]
+            )
+
+    else:
+        triang_points = triangulate_all_observations(
+            camera_model=camera_model,
+            observations=observations
+        )
+
+    return triang_points
 
