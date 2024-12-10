@@ -1,14 +1,13 @@
 import observation
-import camera
-import matplotlib.pyplot as plt
+import vision
+
+from vision.triangulation import TriangulationMethod
 
 import os
 import re
 
-import numpy as np
 
-
-BASE_DIRECTORY = os.path.curdir
+BASE_DIRECTORY = os.path.dirname(os.path.abspath(__file__))
 DATA_DIRECTORY = os.path.join(BASE_DIRECTORY,"data")
 CAMERA_FILE = os.path.join(DATA_DIRECTORY,"camera.dat")
 WORLD_FILE = os.path.join(DATA_DIRECTORY, "world.dat")
@@ -36,18 +35,29 @@ def main():
     ]
 
     world = world_from_file(WORLD_FILE)
-    camera_model = camera.from_file(CAMERA_FILE)
+    camera_model = vision.CameraModel.from_file(CAMERA_FILE)
 
-    triangulated_points = camera.triangulate_two_observations(
-        camera_model,
-        observations[0],
-        observations[1]
+    triangulated_points = vision.triangulation.triangulate_points(
+        camera_model=camera_model,
+        observations=observations,
+        method=TriangulationMethod.ALL_OBSERVATIONS
     )
+    #triangulated_points = camera.triangulate_two_observations(
+    #    camera_model,
+    #    observations[0],
+    #    observations[1]
+    #)
+    missing = []
+    for p_id in sorted(world.keys()):
+        if p_id not in triangulated_points:
+            missing.append(p_id)
+        else:
+            print("W:\t",p_id," -> ", world[p_id])
+            print("T:\t",p_id," -> ",triangulated_points[p_id])
 
-    for p_id in sorted(triangulated_points.keys()):
-        print("W:\t",p_id," -> ", world[p_id])
-        print("T:\t",p_id," -> ",triangulated_points[p_id])
-
+    print("-"*20)
+    print("Missing points:",missing)
+    print("-"*20)
 
 if __name__ == "__main__":
     main()
