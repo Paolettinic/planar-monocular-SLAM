@@ -9,6 +9,11 @@ import numpy as np
 
 
 class TriangulationMethod(Enum):
+    """Enum class for the two methods of triangulation
+    Attributes:
+        PAIR_OBSERVATIONS (auto): Triangulate points from pairwise observations
+        ALL_OBSERVATIONS (auto): Triangulate points from all available observations
+    """
     PAIR_OBSERVATIONS = auto()
     ALL_OBSERVATIONS = auto()
 
@@ -19,22 +24,46 @@ def triangulate_point(
     camera_model: CameraModel,
     observations: List[Observation]
 ) -> NDArray:
-    triang_point = np.array([-1,-1,-1])
+    """
+    Triangulates the 3D coordinates of a point observed from different
+    positions. The point must be present in every observation
+
+    Args:
+        point_id (`int`): The id of the point
+        camera_model (`CameraModel`): The camera model used to obtain
+            projection matrices for each observation.
+        observations (`List[Observation]`): The list of the observation in
+            which the point can be found
+
+    Returns:
+        `NDArray`: triangulated 3D coordinates of the point.
+
+    Raises:
+        `AssertionError`: the point is missing from one of the observations
+    """
     A = np.zeros((2 * len(observations), 4))
     for i,observation in enumerate(observations):
+        #proj_matrix = camera_model.get_projection_matrix(
+        #    observation.odom_position,
+        #    observation.odom_orientation
+        #)
+
+        # Test with ground truth position and orientation
         proj_matrix = camera_model.get_projection_matrix(
-            observation.odom_position,
-            observation.odom_orientation
+            observation.gt_position,
+            observation.gt_orientation
         )
-        assert point_id in observation.points
+
+        assert point_id in observation.points,\
+            f"One observation does not contain the point with id: {point_id}"
 
         u,v = observation.points[point_id]
 
+        # Computer Vision: Algorithms and Applications, Szeliski
+        # Chap. 7.1 eq. 7.5, 7.6
         A[2*i, :] = u * proj_matrix[2, :] - proj_matrix[0, :]
         A[2*i + 1, :] = v * proj_matrix[2, :] - proj_matrix[1, :]
 
-    # Computer Vision: Algorithms and Applications, Szeliski
-    # Chap. 7.1 eq. 7.5, 7.6
     _, _, V = np.linalg.svd(A)
     X = V[-1]
     X /= X[3]
@@ -49,19 +78,19 @@ def triangulate_two_observations(
     observation2: Observation
 ) -> Dict[int, NDArray]:
     """
-    Triangulates the 3D coordinates of points observed from two different
-    positions.
+    Triangulates the 3D coordinates of all points observable from two positions
 
     Args:
-        - camera_model: `CameraModel`, The camera model used to obtain
-            projection matrices for each observation.
-        - observation1: `Observation`, The first observation
-        - observation2: `Observation`, The second observation
+        camera_model (`CameraModel`): The camera model used to obtain
+          projection matrices for each observation.
+        observation1 (`Observation`): The first observation
+        observation2 (`Observation`): The second observation
 
     Returns:
-        - `Dict[int, NDArray]`: A dictionary where the keys are the point IDs
+        `Dict[int, NDArray]`: A dictionary where the keys are the point IDs
             common to both observations and the values are the triangulated 3D
-            coordinates of those points.
+            coordinates of those points. Empty dictionary is returned if there
+            are not common points
     """
 
     triang_points = {}
@@ -82,8 +111,23 @@ def triangulate_points_from_all_observations(
     camera_model: CameraModel,
     observations: List[Observation]
 ) -> Dict[int, NDArray]:
-    triang_points: Dict[int, NDArray] = dict()
-    #point and indices of the observations that contain it
+    """
+    Triangulates the 3D coordinates of points from all the available
+    observations.
+
+    Args:
+        camera_model (`CameraModel`): The camera model used to obtain the
+            projection matrices for each observation.
+        observations (`List[Observation]`): List of all available observations
+
+    Returns:
+        `Dict[int, NDArray]`: A dictionary where the keys are the point IDs
+            and the values are the triangulated 3D coordinates of those points.
+            Empty dictionary is returned if no points are visible from at least
+            two observations.
+    """
+    triang_points = dict()
+    # point-> list of indices of the observations that contain said point
     points: Dict[int, List[int]] = dict()
 
     # Finding correspondences
@@ -93,6 +137,8 @@ def triangulate_points_from_all_observations(
                 points[p] = []
             points[p].append(i)
 
+    # Filter out points visible in only one observation
+    points = {p: points[p] for p in points if len(points[p]) >= 2}
 
     # Triangulate point from all observation where a correspondence appears
     for point in points:
@@ -108,36 +154,41 @@ def triangulate_points_from_all_observations(
 def triangulate_points(
     camera_model: CameraModel,
     observations: List[Observation],
-    method: TriangulationMethod = TriangulationMethod.PAIR_OBSERVATIONS
+    method: TriangulationMethod = TriangulationMethod.ALL_OBSERVATIONS
 ) -> Dict[int, NDArray]:
     triang_points = dict()
-    if method == TriangulationMethod.PAIR_OBSERVATIONS:
-        result = dict()
-        # TODO: very slow
-        for obs1, obs2 in itertools.combinations(observations, 2):
-            two_obs_points = triangulate_two_observations(
-                camera_model=camera_model,
-                observation1=obs1,
-                observation2=obs2
-            )
-            for point in two_obs_points:
-                if point not in triang_points:
-                    result[point] = []
-                result[point].append(
-                    two_obs_points[point]
+    try:
+        # TODO: Check (very slow)
+        if method == TriangulationMethod.PAIR_OBSERVATIONS:
+            result = dict()
+
+            for obs1, obs2 in itertools.combinations(observations, 2):
+                two_obs_points = triangulate_two_observations(
+                    camera_model=camera_model,
+                    observation1=obs1,
+                    observation2=obs2
                 )
 
-        # Merging points averaging the resulting positions
-        triang_points= {
-            point: np.vstack(result[point]).mean(0)
-            for point in result
-        }
+                for point in two_obs_points:
+                    if point not in triang_points:
+                        result[point] = []
+                    result[point].append(two_obs_points[point])
 
-    else:
-        triang_points = triangulate_points_from_all_observations(
-            camera_model=camera_model,
-            observations=observations
-        )
+            # Merging points averaging the resulting coordinates
+            triang_points= {
+                point: np.vstack(result[point]).mean(0)
+                for point in result
+            }
+
+        else:
+            triang_points = triangulate_points_from_all_observations(
+                camera_model=camera_model,
+                observations=observations
+            )
+    except AssertionError as msg:
+        print(msg)
+        return {}
+
 
     return triang_points
 
