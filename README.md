@@ -2,7 +2,7 @@
 Probabilistic Robotics Project
 
 ## Instructions
-- \(OPTIONAL\)Create a conda environment
+- \(OPTIONAL\) Create a conda environment
     ```
     conda create -n probrob python=3.9
     conda activate probrob
