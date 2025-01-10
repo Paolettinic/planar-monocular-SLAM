@@ -43,21 +43,21 @@ def triangulate_point(
     """
     A = np.zeros((2 * len(observations), 4))
     for i,observation in enumerate(observations):
-        #proj_matrix = camera_model.get_projection_matrix(
-        #    observation.odom_position,
-        #    observation.odom_orientation
-        #)
-
-        # Test with ground truth position and orientation
         proj_matrix = camera_model.get_projection_matrix(
-            observation.gt_position,
-            observation.gt_orientation
+            observation.odom_pos,
+            observation.odom_angle
         )
 
-        assert point_id in observation.points,\
+        # Test with ground truth position and orientation
+        #proj_matrix = camera_model.get_projection_matrix(
+        #    observation.gt_pos,
+        #    observation.gt_angle
+        #)
+
+        assert point_id in observation.image_points,\
             f"One observation does not contain the point with id: {point_id}"
 
-        u,v = observation.points[point_id]
+        u,v = observation.image_points[point_id]
 
         # Computer Vision: Algorithms and Applications, Szeliski
         # Chap. 7.1 eq. 7.5, 7.6
@@ -74,8 +74,8 @@ def triangulate_point(
 
 def triangulate_two_observations(
     camera_model: CameraModel,
-    observation1: Observation,
-    observation2: Observation
+    obs1: Observation,
+    obs2: Observation
 ) -> Dict[int, NDArray]:
     """
     Triangulates the 3D coordinates of all points observable from two positions
@@ -83,8 +83,8 @@ def triangulate_two_observations(
     Args:
         camera_model (`CameraModel`): The camera model used to obtain
           projection matrices for each observation.
-        observation1 (`Observation`): The first observation
-        observation2 (`Observation`): The second observation
+        obs1(`Observation`): The first observation
+        obs2 (`Observation`): The second observation
 
     Returns:
         `Dict[int, NDArray]`: A dictionary where the keys are the point IDs
@@ -94,14 +94,14 @@ def triangulate_two_observations(
     """
 
     triang_points = {}
-    common_points = observation1.points.keys() & observation2.points.keys()
+    common_points = obs1.image_points.keys() & obs2.image_points.keys()
     if common_points:
 
         for point_id in common_points:
             triang_points[point_id] = triangulate_point(
                 point_id=point_id,
                 camera_model=camera_model,
-                observations=[observation1, observation2]
+                observations=[obs1, obs2]
             )
 
     return triang_points
@@ -132,7 +132,7 @@ def triangulate_points_from_all_observations(
 
     # Finding correspondences
     for i, observation in enumerate(observations):
-        for p in observation.points:
+        for p in observation.image_points:
             if p not in points:
                 points[p] = []
             points[p].append(i)
@@ -165,8 +165,8 @@ def triangulate_points(
             for obs1, obs2 in itertools.combinations(observations, 2):
                 two_obs_points = triangulate_two_observations(
                     camera_model=camera_model,
-                    observation1=obs1,
-                    observation2=obs2
+                    obs1=obs1,
+                    obs2=obs2
                 )
 
                 for point in two_obs_points:

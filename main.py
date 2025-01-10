@@ -1,14 +1,14 @@
 from observation import Observation
-import vision
+from vision import cameramodel
+from vision.cameramodel import CameraModel
 from vision.triangulation import TriangulationMethod, triangulate_points
+from bundleadj.total_least_square import *
 import plotly.graph_objects as go
 
 import os
 import re
 
 import numpy as np
-from mpl_toolkits import mplot3d
-import matplotlib.pyplot as plt
 
 
 BASE_DIRECTORY = os.path.dirname(os.path.abspath(__file__))
@@ -39,7 +39,8 @@ def main() -> None:
     ]
 
     p_world = world_from_file(WORLD_FILE)
-    camera_model = vision.CameraModel.from_file(CAMERA_FILE)
+    camera_model = CameraModel.from_file(CAMERA_FILE)
+
 
     p_triang = triangulate_points(
         camera_model=camera_model,
@@ -51,42 +52,29 @@ def main() -> None:
         print("Couldn't triangulate any point")
         return
 
-    figure = go.Figure()
-    for p in p_triang:
-        figure.add_scatter3d(
-            x=[p_world[p][0], p_triang[p][0]],
-            y=[p_world[p][1], p_triang[p][1]],
-            z=[p_world[p][2], p_triang[p][2]],
-            mode='markers+lines',
-            marker_size=2,
-            marker_color=['blue','green'],
-            line_color='red',
-            showlegend=False
-        )
-    figure.show()
-    #plt_p_world = np.array(list(p_world[p] for p in p_triang))
-    #plt_p_triang = np.array(list(p_triang[p] for p in p_triang))
+    bundle_adjustment(observations, p_triang, camera_model)
 
-
-    #figure = go.Figure(data=[
-    #    go.Scatter3d(
-    #        x=plt_p_world[:, 0],
-    #        y=plt_p_world[:, 1],
-    #        z=plt_p_world[:, 2],
-    #        mode='markers',
-    #        marker=dict(color=5,size=3)
-    #    ),
-    #    go.Scatter3d(
-    #        x=plt_p_triang[:, 0],
-    #        y=plt_p_triang[:, 1],
-    #        z=plt_p_triang[:, 2],
-    #        mode='markers',
-    #        marker=dict(color=2,size=3)
-    #    )]
-    #)
-
+    #figure = go.Figure()
+    #for p in p_triang:
+    #    figure.add_scatter3d(
+    #        x=[p_world[p][0], p_triang[p][0]],
+    #        y=[p_world[p][1], p_triang[p][1]],
+    #        z=[p_world[p][2], p_triang[p][2]],
+    #        mode='markers+lines',
+    #        marker_size=2,
+    #        marker_color=['blue','green'],
+    #        line_color='red',
+    #        showlegend=False
+    #    )
+    #figure.show()
 
 
 if __name__ == "__main__":
     main()
+    #X = np.random.randn(5,4,4)
+    #dx = np.random.randn(5,6)
+    #Xr, Xl = boxplus(X, np.array([]), dx, np.array([]))
+    #print(Xr)
+    #print(Xl)
+
 
