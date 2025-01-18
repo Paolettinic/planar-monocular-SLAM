@@ -13,17 +13,11 @@ class Observation:
     @classmethod
     def from_file(cls, filepath: str) -> "Observation":
         with open(filepath, "r") as file_p:
-            sequence = int(
-                file_p.readline()
-                    .strip().split(":")[1]
-                    .strip()
-            )
+            sequence = int(file_p.readline() .strip().split(":")[1] .strip())
             values = file_p.readline().strip().split(":")[1].strip().split()
             *gt_pos, gt_angle = (float(pose) for pose in values)
-
             values = file_p.readline().strip().split(":")[1].strip().split()
             *odom_pos, odom_angle = (float(pose) for pose in values)
-
             points = {}
             for line in file_p:
                 if line.strip() == "":

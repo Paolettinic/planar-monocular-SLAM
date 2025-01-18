@@ -1,7 +1,7 @@
 import numpy as np
 
 from numpy.typing import NDArray
-from utils.rotations import Rz
+from utils.utils import rot_z
 from typing import Tuple, Optional
 
 class CameraModel:
@@ -38,7 +38,7 @@ class CameraModel:
 
         if position and rotation:
             assert len(position) == 2
-            R = Rz(rotation)
+            R = rot_z(rotation)
             # Computing the inverse transformation, since [R|t] maps a point from
             # robot frame into the world frame.
             Rt = np.eye(4)
@@ -46,7 +46,7 @@ class CameraModel:
             Rt[:3, 3] = -R.T @ np.array([*position,0]) # 0 imposes planar motion
             T = (self.inv_cam_transform @ Rt)[:3, :]
         elif x_r_w is not None:
-            T = (self.inv_cam_transform @ np.linalg.inv(x_r_w))[:3, :]
+            T = (self.inv_cam_transform @ np.linalg.inv(x_r_w))[:3, :] #TODO: change to rt
         else:
             T = self.inv_cam_transform[:3, :]
 
@@ -80,9 +80,11 @@ class CameraModel:
         in_range = self.z_near < projected_point[2] < self.z_far
         if in_range:
             p_img = projected_point/projected_point[2]
-            in_frame = 0 < p_img[0] < self.width and 0 < p_img[1] < self.height
+            in_frame = (0 < p_img[0] < self.width) and (0 < p_img[1] < self.height)
 
-        return projected_point, p_img[:2], in_range and in_frame
+        valid = in_range and in_frame
+
+        return projected_point, p_img[:2], bool(valid)
 
 
 
