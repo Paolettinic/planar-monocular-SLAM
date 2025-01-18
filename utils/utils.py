@@ -1,6 +1,9 @@
 import numpy as np
 from numpy.typing import NDArray
 
+def se2_to_se3_vec(vector:NDArray) -> NDArray:
+    return np.array([vector[0],vector[1], 0, 0, 0, vector[2]])
+
 def rotation_matrix(rvector: NDArray) -> NDArray:
     return rot_x(rvector[0]) @ rot_y(rvector[1]) @ rot_z(rvector[2])
 

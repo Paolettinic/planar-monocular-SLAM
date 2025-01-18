@@ -3,7 +3,7 @@ import numpy as np
 from numpy.typing import NDArray
 from vision.cameramodel import CameraModel
 from observation import Observation
-from utils.utils import rot_x, rot_y, rot_z, rotation_matrix
+from utils.utils import rot_x, rot_y, rot_z, rotation_matrix, se2_to_se3_vec
 from tqdm import tqdm
 from .pose import linearize_poses
 from .projection import linearize_projections
@@ -11,8 +11,6 @@ import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 
 
-def se2_to_se3_vec(vector:NDArray) -> NDArray:
-    return np.array([vector[0],vector[1], 0, 0, 0, vector[2]])
 
 
 def v2t(vector: NDArray) -> NDArray:
@@ -35,6 +33,7 @@ def boxplus(
     delta_x: NDArray,
 ) -> Tuple[NDArray, NDArray]:
     """boxplus"""
+
     delta_x = delta_x.reshape(-1)
     size_xr = x_r.shape[0]
     size_xl = x_l.shape[0]
@@ -42,9 +41,13 @@ def boxplus(
     delta_xr = delta_x[: size_xr * size_dx_r]
     delta_xl = delta_x[size_xr * size_dx_r :]
 
-    d_xr = np.zeros((size_xr, 4, 4))
     for i in range(size_xr):
-        dxr = v2t(delta_xr[i * size_dx_r : i * size_dx_r + size_dx_r])
+        dxr_i = delta_xr[i * size_dx_r : i * size_dx_r + size_dx_r]
+        if size_dx_r == 3:
+            dxr_i = se2_to_se3_vec(
+                delta_xr[i * size_dx_r : i * size_dx_r + size_dx_r]
+            )
+        dxr = v2t(dxr_i)
         x_r[i, :, :] = dxr @ x_r[i, :, :]
     delta_xl = delta_xl.reshape(size_xl, size_dx_l)
 
@@ -86,7 +89,7 @@ def total_least_square(
     pose_association: List[Tuple[int, int]],
     camera_model: CameraModel,
     iterations: int = 5,
-    damping: float = 1e-5
+    damping: float = 1e-4
 ) -> Tuple[NDArray, NDArray, NDArray, NDArray, NDArray]:
 
     xr_size = dxr_size * x_r.shape[0]
@@ -166,8 +169,8 @@ def bundle_adjustment(
     z_odom = np.zeros((system_size - 1, 4, 4))
     z_proj = np.zeros((system_size * num_points, 2))
 
-    pose_association = [] #np.zeros((system_size - 1, 2))
-    proj_association = [] #np.zeros((system_size * num_points, 2))
+    pose_association = []
+    proj_association = []
 
     true_positions = np.zeros((system_size, 2))
     true_positions[0, :] = np.array(observations[0].gt_pos)
@@ -199,18 +202,13 @@ def bundle_adjustment(
 
     z_proj = z_proj[:num_proj, :]
 
-    #dx = np.array(
-    #    ([1, 1, 0] * system_size)  +
-    #    ([2, 2, 2] * num_points)
-    #).reshape((system_size+num_points)*3, 1)
-    #x_r, x_l = boxplus(xr, xl, 3, 3, dx)
 
     x_r, x_l, chi_pose_stat, chi_proj_stat, proj_inliers = total_least_square(
         x_r=xr,
         x_l=xl,
         z_proj=z_proj,
         z_odom=z_odom,
-        dxr_size=6,
+        dxr_size=3,
         dxl_size=3,
         proj_association=proj_association,
         pose_association=pose_association,
@@ -230,7 +228,7 @@ def bundle_adjustment(
             y=x_l[:, 1],
             z=x_l[:, 2],
             mode="markers"
-        )
+        ),
     ])
     figure.show()
 
