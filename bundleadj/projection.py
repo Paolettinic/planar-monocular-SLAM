@@ -1,57 +1,8 @@
-from utils.utils import skew, d_rot_z_0
+from utils.utils import d_rot_z_0, v2t
 from vision.cameramodel import CameraModel
 from typing import Tuple, List
 from numpy.typing import NDArray
 import numpy as np
-
-#def projection_error_and_jacobian(
-#    x_r: NDArray,
-#    x_l: NDArray,
-#    z:NDArray,
-#    camera: CameraModel
-#) -> Tuple[bool, NDArray, NDArray, NDArray]:
-#    jwl = np.zeros((3, 3))
-#    jwr = np.zeros((3, 6))
-#    error = np.zeros(2)
-#    x_r_c = camera.inv_cam_transform
-#    K = camera.intrinsic_matrix
-#
-#    x_w_c = x_r_c @ np.linalg.inv(x_r) #cXr @ (wXr)^(-1)
-#
-#    ir = x_w_c[:3, :3]
-#    it = -ir @ x_w_c[:3 , 3]
-#
-#    p_cam = ir @ x_l + it # point in camera frame
-#    p_img = K @ p_cam # point in image
-#    fz = 1 / p_img[2]
-#    fz2 = fz ** 2
-#    z_hat = (p_img * fz)[:2]
-#
-#    # visibility check
-#    if (
-#        p_img[2] < camera.z_near or
-#        p_img[2] > camera.z_far or
-#        z_hat[0] < 0 or
-#        z_hat[0] > camera.width or
-#        z_hat[1] < 0 or
-#        z_hat[1] > camera.height
-#    ):
-#        return False, error, jwr, jwl
-#
-#
-#    error = z_hat - z
-#
-#    jacobian_proj = np.array([
-#        [fz, 0, -p_img[0] / fz2],
-#        [0, fz, -p_img[1] / fz2],
-#    ])
-#
-#    jwl = ir
-#
-#    jwr[:3, :3] = -ir
-#    jwr[:3, 3:] = ir @ skew(x_l)
-#
-#    return True, error, jacobian_proj @ K @ jwr, jacobian_proj @ K @ jwl
 
 
 def projection_error_and_jacobian(
@@ -69,14 +20,13 @@ def projection_error_and_jacobian(
 
     x_w_c = x_r_c @ np.linalg.inv(x_r) #cXr @ (wXr)^(-1)
     ir = x_w_c[:3, :3]
-    it = -ir @ x_w_c[:3 , 3]
+    it = x_w_c[:3 , 3]
 
     p_cam = ir @ x_l + it # point in camera frame
     p_img = K @ p_cam # point in image
     fz = 1 / p_img[2]
     fz2 = fz ** 2
     z_proj = (p_img * fz)[:2]
-
     # visibility check
     if (
         p_cam[2] < camera.z_near or
@@ -97,10 +47,9 @@ def projection_error_and_jacobian(
     ])
     d_rot_t_z_0 = -d_rot_z_0  # d_rot_z_0 is skew -> negative = transpose
 
-    jwl = ir
-
     jwr[:3, :2] = -ir @ np.eye(3, 2)
     jwr[:3, 2] = ir @ d_rot_t_z_0 @ x_l
+    jwl = ir
 
     return True, error, jacobian_proj @ K @ jwr, jacobian_proj @ K @ jwl
 
@@ -113,7 +62,7 @@ def linearize_projections(
     size_dx_l: int,
     proj_association: List[Tuple[int, int]],
     camera_model: CameraModel,
-    kernel_threshold: float = 100
+    kernel_threshold: float = 1e3
 ) -> Tuple[NDArray, NDArray, float, int]:
     xr_size = size_dx_r * x_r.shape[0]
     xl_size = size_dx_l * x_l.shape[0]
@@ -123,7 +72,8 @@ def linearize_projections(
     b = np.zeros((system_size, 1))
     chi = 0.0
     num_inliers = 0
-    omega_proj = np.eye(2) * 1e-6
+    omega_proj = np.eye(2)
+
     for i, proj in enumerate(z):
 
         idx_pose, idx_land = proj_association[i]
@@ -178,4 +128,5 @@ def linearize_projections(
         ] += (jxl.T @ omega_proj @ e).reshape(size_dx_l, 1)
 
     return h, b, float(chi), num_inliers
+
 

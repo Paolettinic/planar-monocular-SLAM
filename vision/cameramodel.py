@@ -23,7 +23,8 @@ class CameraModel:
         self.height = height
 
 
-    def get_projection_matrix(
+
+    def get_extrinsic_matrix(
         self,
         position: Optional[Tuple[float, ...]] = None,
         rotation: Optional[float] = None,
@@ -46,12 +47,26 @@ class CameraModel:
             Rt[:3, 3] = -R.T @ np.array([*position,0]) # 0 imposes planar motion
             T = (self.inv_cam_transform @ Rt)[:3, :]
         elif x_r_w is not None:
-            T = (self.inv_cam_transform @ np.linalg.inv(x_r_w))[:3, :] #TODO: change to rt
+            T = (self.inv_cam_transform @ np.linalg.inv(x_r_w))[:3, :]
         else:
             T = self.inv_cam_transform[:3, :]
 
-        return self.intrinsic_matrix @ T
+        return T
 
+    def get_projection_matrix(
+        self,
+        position: Optional[Tuple[float, ...]] = None,
+        rotation: Optional[float] = None,
+        x_r_w: Optional[NDArray] = None
+    ) -> NDArray:
+        """
+        Get the projection matrix given the position and the orientation
+        Args:
+        - position: `Tuple[float, float]`, (x, y) position of the robot
+        - rotation: `float`, rotation around z of the robot
+        """
+        T = self.get_extrinsic_matrix(position=position, rotation=rotation, x_r_w=x_r_w)
+        return self.intrinsic_matrix @ T
 
     def project_pt_world(
         self,
@@ -66,25 +81,23 @@ class CameraModel:
         in_range = False
         in_frame = False
 
-        projection_matrix = np.eye(4)
+        extrinsics = self.get_extrinsic_matrix(
+            position=position,
+            rotation=rotation,
+            x_r_w=x_r_w
+        )
 
-        if position and rotation:
-            projection_matrix = self.get_projection_matrix(
-                position=position,
-                rotation=rotation
-            )
-        else:
-            projection_matrix = self.get_projection_matrix(x_r_w=x_r_w)
+        p_cam = extrinsics @ np.append(point_world,1)
+        p_img = self.intrinsic_matrix @ p_cam
+        p_img /= p_img[2]
 
-        projected_point = projection_matrix @ np.append(point_world,1)
-        in_range = self.z_near < projected_point[2] < self.z_far
-        if in_range:
-            p_img = projected_point/projected_point[2]
-            in_frame = (0 < p_img[0] < self.width) and (0 < p_img[1] < self.height)
 
-        valid = in_range and in_frame
+        in_range = self.z_near < p_cam[2] < self.z_far
+        in_frame = (0 < p_img[0] < self.width) and (0 < p_img[1] < self.height)
 
-        return projected_point, p_img[:2], bool(valid)
+        visible = in_range and in_frame
+
+        return p_cam, p_img[:2], bool(visible)
 
 
 

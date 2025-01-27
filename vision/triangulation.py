@@ -1,5 +1,5 @@
 from .cameramodel import CameraModel
-from typing import List, Dict
+from typing import List, Dict, Tuple
 from observation import Observation
 from numpy.typing import NDArray
 from enum import Enum, auto
@@ -23,7 +23,7 @@ def triangulate_point(
     point_id: int,
     camera_model: CameraModel,
     observations: List[Observation]
-) -> NDArray:
+) -> Tuple[bool, NDArray]:
     """
     Triangulates the 3D coordinates of a point observed from different
     positions. The point must be present in every observation
@@ -36,6 +36,7 @@ def triangulate_point(
             which the point can be found
 
     Returns:
+        `bool`: whether the point is reliable or not
         `NDArray`: triangulated 3D coordinates of the point.
 
     Raises:
@@ -64,12 +65,27 @@ def triangulate_point(
         A[2*i, :] = u * proj_matrix[2, :] - proj_matrix[0, :]
         A[2*i + 1, :] = v * proj_matrix[2, :] - proj_matrix[1, :]
 
-    _, _, V = np.linalg.svd(A)
+    _, sigma, V = np.linalg.svd(A)
     X = V[-1]
     X /= X[3]
-    triang_point = X[:3]
+    if sigma[-1] > 50 or X[2] < 0:
+        return False, -np.ones(3)
 
-    return triang_point
+    #if X[2] < 0:
+    #    return False, -np.ones(3)
+
+    triang_point = X[:3]
+    #for i, observation in enumerate(observations):
+    #    _, _, valid = camera_model.project_pt_world(
+    #        point_world=triang_point,
+    #        position=observation.odom_pos,
+    #        rotation=observation.odom_angle
+    #    )
+
+    #    if not valid:
+    #        return False, -np.ones(3)
+
+    return True, triang_point
 
 
 def triangulate_two_observations(
@@ -96,13 +112,14 @@ def triangulate_two_observations(
     triang_points = {}
     common_points = obs1.image_points.keys() & obs2.image_points.keys()
     if common_points:
-
         for point_id in common_points:
-            triang_points[point_id] = triangulate_point(
+            reliable, point_3d = triangulate_point(
                 point_id=point_id,
                 camera_model=camera_model,
                 observations=[obs1, obs2]
             )
+            if reliable:
+                triang_points[point_id] = point_3d
 
     return triang_points
 
@@ -138,15 +155,17 @@ def triangulate_points_from_all_observations(
             points[p].append(i)
 
     # Filter out points visible in only one observation
-    points = {p: points[p] for p in points if len(points[p]) >= 2}
+    v_points = filter(lambda p: len(points[p]) >= 2, points)
 
     # Triangulate point from all observation where a correspondence appears
-    for point in points:
-        triang_points[point] = triangulate_point(
+    for point in v_points:
+        reliable, point_3d= triangulate_point(
             point_id=point,
             camera_model=camera_model,
             observations=[observations[i] for i in points[point]]
         )
+        if reliable:
+            triang_points[point] = point_3d
 
     return triang_points
 

@@ -3,27 +3,12 @@ import numpy as np
 from numpy.typing import NDArray
 from vision.cameramodel import CameraModel
 from observation import Observation
-from utils.utils import rot_x, rot_y, rot_z, rotation_matrix, se2_to_se3_vec
+from utils.utils import se2_to_se3_vec, v2t
 from tqdm import tqdm
 from .pose import linearize_poses
 from .projection import linearize_projections
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
-
-
-
-
-def v2t(vector: NDArray) -> NDArray:
-    """
-    vector to transformation
-    Args:
-        - vector (`NDArray`) : 6d vector that parametrizes a SE(3)
-            transformation
-    """
-    T = np.eye(4)
-    T[:3,:3] = rotation_matrix(vector[3:])
-    T[:3, 3] = vector[:3].reshape((1,3))
-    return T
 
 def boxplus(
     x_r: NDArray,
@@ -41,6 +26,9 @@ def boxplus(
     delta_xr = delta_x[: size_xr * size_dx_r]
     delta_xl = delta_x[size_xr * size_dx_r :]
 
+    new_xr = np.zeros_like(x_r)
+    new_xl = np.zeros_like(x_l)
+
     for i in range(size_xr):
         dxr_i = delta_xr[i * size_dx_r : i * size_dx_r + size_dx_r]
         if size_dx_r == 3:
@@ -48,34 +36,14 @@ def boxplus(
                 delta_xr[i * size_dx_r : i * size_dx_r + size_dx_r]
             )
         dxr = v2t(dxr_i)
-        x_r[i, :, :] = dxr @ x_r[i, :, :]
-    delta_xl = delta_xl.reshape(size_xl, size_dx_l)
+        new_xr[i, :, :] = dxr @ x_r[i, :, :]
 
-    return x_r, x_l + delta_xl
+    for i in range(size_xl):
+        dxl_i = delta_xl[i*size_dx_l : i*size_dx_l + size_dx_l]
+        new_xl[i, :] = x_l[i, :] + dxl_i
+    #delta_xl = delta_xl.reshape(size_xl, size_dx_l)
 
-#def boxplus(
-#    x_r: NDArray,
-#    x_l: NDArray,
-#    size_dx_r: int,
-#    size_dx_l: int,
-#    delta_x: NDArray,
-#) -> Tuple[NDArray, NDArray]:
-#    """boxplus"""
-#    delta_x = delta_x.reshape(-1)
-#    size_xr = x_r.shape[0]
-#    size_xl = x_l.shape[0]
-#
-#    delta_xr = delta_x[: size_xr * size_dx_r]
-#    delta_xl = delta_x[size_xr * size_dx_r :]
-#
-#    d_xr = np.zeros((size_xr, 4, 4))
-#    for i in range(size_xr):
-#        d_xr[i, :, :] = v2t(se2_to_se3_vec(
-#            delta_xr[i * size_dx_r : i * size_dx_r + size_dx_r]
-#        ))
-#    delta_xl = delta_xl.reshape(size_xl, size_dx_l)
-#
-#    return d_xr @ x_r, x_l + delta_xl
+    return new_xr, new_xl
 
 
 def total_least_square(
@@ -89,7 +57,7 @@ def total_least_square(
     pose_association: List[Tuple[int, int]],
     camera_model: CameraModel,
     iterations: int = 5,
-    damping: float = 1e-4
+    damping: float = 1e-5
 ) -> Tuple[NDArray, NDArray, NDArray, NDArray, NDArray]:
 
     xr_size = dxr_size * x_r.shape[0]
@@ -100,8 +68,9 @@ def total_least_square(
     chi_pose_stat= np.zeros(iterations)
 
     inliers_p = np.zeros(iterations)
+    progress_bar = tqdm(range(iterations), desc="TLS Iteration")
 
-    for i in tqdm(range(iterations)):
+    for i in progress_bar:
         h = np.zeros((system_size, system_size))
         b = np.zeros((system_size, 1))
 
@@ -132,10 +101,11 @@ def total_least_square(
 
         dx = np.zeros((system_size, 1))
 
-        dx[dxr_size :] = -np.linalg.solve(
-            h[dxr_size :, dxr_size :], b[dxr_size :]
+        dx[dxr_size :] = np.linalg.solve(
+            h[dxr_size :, dxr_size :], -b[dxr_size :]
         )
-
+        error = np.linalg.norm(dx)
+        progress_bar.set_postfix({"error":f"{error:5.3}"})
         x_r, x_l = boxplus(x_r, x_l, dxr_size, dxl_size, dx)
 
     return x_r, x_l, chi_pose_stat, chi_proj_stat, inliers_p
@@ -152,38 +122,38 @@ def bundle_adjustment(
     point_to_index = {}
     index_to_point = {}
 
-    system_size = len(observations)
+    num_poses = len(observations)
     num_points = len(triangulated_points)
 
-    xr = np.zeros((system_size, 4, 4))
+    xr = np.zeros((num_poses, 4, 4))
     xl = np.zeros((len(triangulated_points), 3))
 
     xl_gold = np.zeros((len(true_points), 3))
-    for index, pt_id in enumerate(triangulated_points):
+    for index, pt_id in enumerate(sorted(triangulated_points)):
         point_to_index[pt_id] = index
         index_to_point[index] = pt_id
         xl[index] = triangulated_points[pt_id]
-
         xl_gold[index] = true_points[pt_id]
 
-    z_odom = np.zeros((system_size - 1, 4, 4))
-    z_proj = np.zeros((system_size * num_points, 2))
+    z_odom = np.zeros((num_poses - 1, 4, 4))
+    z_proj = np.zeros((num_poses * num_points, 2))
 
     pose_association = []
     proj_association = []
 
-    true_positions = np.zeros((system_size, 2))
+    true_positions = np.zeros((num_poses, 2))
     true_positions[0, :] = np.array(observations[0].gt_pos)
 
-    odom_positions = np.zeros((system_size, 2))
+    odom_positions = np.zeros((num_poses, 2))
     odom_positions[0, :] = np.array(observations[0].odom_pos)
 
 
     num_proj = 0
 
-    for i in range(system_size):
+    for i in range(num_poses):
         xr[i,:,:] = v2t(se2_to_se3_vec(np.array(
             [*observations[i].odom_pos, observations[i].odom_angle]
+            #[*observations[i].gt_pos, observations[i].gt_angle]
         )))
         if i > 0:
             z_odom[i - 1, :, :] = np.linalg.inv(xr[i - 1]) @ xr[i]
@@ -222,18 +192,27 @@ def bundle_adjustment(
             y=xl_gold[:, 1],
             z=xl_gold[:, 2],
             mode="markers",
+            name="GT"
         ),
         go.Scatter3d(
             x=x_l[:, 0],
             y=x_l[:, 1],
             z=x_l[:, 2],
-            mode="markers"
+            mode="markers",
+            name="OPT"
+        ),
+        go.Scatter3d(
+            x=xl[:, 0],
+            y=xl[:, 1],
+            z=xl[:, 2],
+            mode="markers",
+            name="TRIANG"
         ),
     ])
     figure.show()
 
-    computed_poses = np.zeros((system_size,2))
-    for i in range(system_size):
+    computed_poses = np.zeros((num_poses,2))
+    for i in range(num_poses):
         computed_poses[i, :] = x_r[i, :2, 3]
 
     _, ((ax1, ax2), (ax3, ax4))= plt.subplots(2,2)

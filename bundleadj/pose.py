@@ -67,7 +67,7 @@ def linearize_poses(
     z: NDArray,
     size_dx_r: int,
     pose_association: List[Tuple[int, int]],
-    kernel_threshold: float = 1e-3
+    kernel_threshold: float = 2
 ) -> Tuple[NDArray, NDArray, float]:
     xr_size = size_dx_r * x_r.shape[0]
 
@@ -75,7 +75,8 @@ def linearize_poses(
     b = np.zeros((xr_size, 1))
 
     omega = np.eye(12)
-    omega[:9, :9] *= 1e2
+    omega *= 1e3
+    #omega[:9, :9] *= 1e2
 
     chi = 0.0
 
@@ -87,7 +88,7 @@ def linearize_poses(
 
         e, j_xr_i, j_xr_j = pose_error_and_jacobian(cur_x_ri, cur_x_rj, meas)
 
-        chi_ = (e.T @  e).item()
+        chi_ = e @ e
         if chi_ > kernel_threshold:
             e *= np.sqrt(kernel_threshold / chi_)
             chi_ = kernel_threshold
@@ -117,10 +118,8 @@ def linearize_poses(
         b[
             idx_pose_i : idx_pose_i + size_dx_r
         ] += (j_xr_i.T @ omega @ e).reshape(size_dx_r, 1)
-        #] += (j_xr_i.T @ omega @ e).reshape(3, 1)
         b[
             idx_pose_j : idx_pose_j + size_dx_r
         ] += (j_xr_j.T @ omega @ e).reshape(size_dx_r, 1)
-        #] += (j_xr_j.T @ omega @ e).reshape(3, 1)
 
     return h, b, chi

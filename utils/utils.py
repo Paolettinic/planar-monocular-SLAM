@@ -1,6 +1,18 @@
 import numpy as np
 from numpy.typing import NDArray
 
+def v2t(vector: NDArray) -> NDArray:
+    """
+    vector to transformation
+    Args:
+        - vector (`NDArray`) : 6d vector that parametrizes a SE(3)
+            transformation
+    """
+    T = np.eye(4)
+    T[:3,:3] = rotation_matrix(vector[3:])
+    T[:3, 3] = vector[:3]
+    return T
+
 def se2_to_se3_vec(vector:NDArray) -> NDArray:
     return np.array([vector[0],vector[1], 0, 0, 0, vector[2]])
 
