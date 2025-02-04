@@ -1,18 +1,20 @@
-from utils.utils import d_rot_z_0, v2t
+from utils.utils import d_rot_z_0
 from vision.cameramodel import CameraModel
 from typing import Tuple, List
 from numpy.typing import NDArray
 import numpy as np
 
 
-def projection_error_and_jacobian(
+def projection_error_and_jacobian_se2(
     x_r: NDArray,
     x_l: NDArray,
     z:NDArray,
+    size_dx_r: int,
+    size_dx_l: int,
     camera: CameraModel
 ) -> Tuple[bool, NDArray, NDArray, NDArray]:
-    jwl = np.zeros((3, 3))
-    jwr = np.zeros((3, 3))
+    jwr = np.zeros((3, size_dx_r))
+    jwl = np.zeros((3, size_dx_l))
     error = np.zeros(2)
 
     x_r_c = camera.inv_cam_transform
@@ -25,7 +27,7 @@ def projection_error_and_jacobian(
     p_cam = ir @ x_l + it # point in camera frame
     p_img = K @ p_cam # point in image
     fz = 1 / p_img[2]
-    fz2 = fz ** 2
+    fz2 = np.pow(fz, 2)
     z_proj = (p_img * fz)[:2]
     # visibility check
     if (
@@ -47,10 +49,9 @@ def projection_error_and_jacobian(
     ])
     d_rot_t_z_0 = -d_rot_z_0  # d_rot_z_0 is skew -> negative = transpose
 
-    jwr[:3, :2] = -ir @ np.eye(3, 2)
+    jwr[:3, :2] = -ir @ np.eye(3,2)
     jwr[:3, 2] = ir @ d_rot_t_z_0 @ x_l
     jwl = ir
-
     return True, error, jacobian_proj @ K @ jwr, jacobian_proj @ K @ jwl
 
 
@@ -62,7 +63,7 @@ def linearize_projections(
     size_dx_l: int,
     proj_association: List[Tuple[int, int]],
     camera_model: CameraModel,
-    kernel_threshold: float = 1e3
+    kernel_threshold: float = 10
 ) -> Tuple[NDArray, NDArray, float, int]:
     xr_size = size_dx_r * x_r.shape[0]
     xl_size = size_dx_l * x_l.shape[0]
@@ -73,6 +74,7 @@ def linearize_projections(
     chi = 0.0
     num_inliers = 0
     omega_proj = np.eye(2)
+    #omega_proj *= 1e-2
 
     for i, proj in enumerate(z):
 
@@ -83,10 +85,12 @@ def linearize_projections(
         index_pose_matrix = idx_pose * size_dx_r
         index_land_matrix = xr_size + idx_land * size_dx_l
 
-        valid, e, jxr, jxl = projection_error_and_jacobian(
+        valid, e, jxr, jxl = projection_error_and_jacobian_se2(
             x_r=cur_xr,
             x_l=cur_xl,
             z=proj,
+            size_dx_r=size_dx_r,
+            size_dx_l=size_dx_l,
             camera=camera_model
         )
 
@@ -126,6 +130,7 @@ def linearize_projections(
         b[
             index_land_matrix : index_land_matrix + size_dx_l
         ] += (jxl.T @ omega_proj @ e).reshape(size_dx_l, 1)
+
 
     return h, b, float(chi), num_inliers
 

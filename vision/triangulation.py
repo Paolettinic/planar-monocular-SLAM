@@ -68,22 +68,22 @@ def triangulate_point(
     _, sigma, V = np.linalg.svd(A)
     X = V[-1]
     X /= X[3]
-    if sigma[-1] > 50 or X[2] < 0:
-        return False, -np.ones(3)
-
-    #if X[2] < 0:
+    if len(sigma) != 4:
+        print(len(sigma))
+        input()
+    #if sigma[-1] / sigma[0] > 1e-2:
     #    return False, -np.ones(3)
 
     triang_point = X[:3]
-    #for i, observation in enumerate(observations):
-    #    _, _, valid = camera_model.project_pt_world(
-    #        point_world=triang_point,
-    #        position=observation.odom_pos,
-    #        rotation=observation.odom_angle
-    #    )
-
-    #    if not valid:
-    #        return False, -np.ones(3)
+    visible = [
+        camera_model.project_pt_world(
+            point_world=triang_point,
+            position=observation.odom_pos,
+            rotation=observation.odom_angle
+        )[-1] for observation in observations
+    ]
+    if not any(visible):
+        return False, -np.ones(3)
 
     return True, triang_point
 

@@ -11,9 +11,3 @@ z_near: 0
 z_far:  5
 width:  640
 height: 480
-
-testing
-  0   0   -1  0
-  0   1   0   0
-  1   0   0   0
-  0   0   0   1

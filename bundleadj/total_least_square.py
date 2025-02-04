@@ -57,7 +57,7 @@ def total_least_square(
     pose_association: List[Tuple[int, int]],
     camera_model: CameraModel,
     iterations: int = 5,
-    damping: float = 1e-5
+    damping: float = 1e-4
 ) -> Tuple[NDArray, NDArray, NDArray, NDArray, NDArray]:
 
     xr_size = dxr_size * x_r.shape[0]
@@ -68,9 +68,9 @@ def total_least_square(
     chi_pose_stat= np.zeros(iterations)
 
     inliers_p = np.zeros(iterations)
-    progress_bar = tqdm(range(iterations), desc="TLS Iteration")
+    t_iterations = tqdm(range(iterations), desc="TLS Iteration")
 
-    for i in progress_bar:
+    for i in t_iterations:
         h = np.zeros((system_size, system_size))
         b = np.zeros((system_size, 1))
 
@@ -101,11 +101,11 @@ def total_least_square(
 
         dx = np.zeros((system_size, 1))
 
-        dx[dxr_size :] = np.linalg.solve(
-            h[dxr_size :, dxr_size :], -b[dxr_size :]
+        dx[dxr_size :] = -np.linalg.solve(
+            h[dxr_size :, dxr_size :], b[dxr_size :]
         )
         error = np.linalg.norm(dx)
-        progress_bar.set_postfix({"error":f"{error:5.3}"})
+        t_iterations.set_postfix({"error":f"{error:5.3}"})
         x_r, x_l = boxplus(x_r, x_l, dxr_size, dxl_size, dx)
 
     return x_r, x_l, chi_pose_stat, chi_proj_stat, inliers_p
@@ -141,11 +141,19 @@ def bundle_adjustment(
     pose_association = []
     proj_association = []
 
-    true_positions = np.zeros((num_poses, 2))
-    true_positions[0, :] = np.array(observations[0].gt_pos)
+    true_positions = np.zeros((num_poses, 4))
+    true_positions[0, :] = np.array([
+        *observations[0].gt_pos,
+        np.cos(observations[0].gt_angle),
+        np.sin(observations[0].gt_angle),
+    ])
 
-    odom_positions = np.zeros((num_poses, 2))
-    odom_positions[0, :] = np.array(observations[0].odom_pos)
+    odom_positions = np.zeros((num_poses, 4))
+    odom_positions[0, :] = np.array([
+        *observations[0].odom_pos,
+        np.cos(observations[0].odom_angle),
+        np.sin(observations[0].odom_angle),
+    ])
 
 
     num_proj = 0
@@ -158,8 +166,16 @@ def bundle_adjustment(
         if i > 0:
             z_odom[i - 1, :, :] = np.linalg.inv(xr[i - 1]) @ xr[i]
             pose_association.append((i - 1, i))
-        odom_positions[i, :] = np.array(observations[i].odom_pos)
-        true_positions[i, :] = np.array(observations[i].gt_pos)
+        odom_positions[i, :] = np.array([
+            *observations[i].odom_pos,
+            np.cos(observations[i].odom_angle),
+            np.sin(observations[i].odom_angle)
+        ])
+        true_positions[i, :] = np.array([
+            *observations[i].gt_pos,
+            np.cos(observations[i].gt_angle),
+            np.sin(observations[i].gt_angle)
+        ])
 
         for pt_id in observations[i].image_points:
             if pt_id not in triangulated_points:
@@ -192,6 +208,7 @@ def bundle_adjustment(
             y=xl_gold[:, 1],
             z=xl_gold[:, 2],
             mode="markers",
+            marker=dict(size=4,color="blue"),
             name="GT"
         ),
         go.Scatter3d(
@@ -199,6 +216,7 @@ def bundle_adjustment(
             y=x_l[:, 1],
             z=x_l[:, 2],
             mode="markers",
+            marker=dict(size=4,color="red", opacity=0.8),
             name="OPT"
         ),
         go.Scatter3d(
@@ -206,31 +224,65 @@ def bundle_adjustment(
             y=xl[:, 1],
             z=xl[:, 2],
             mode="markers",
+            marker=dict(size=4,color="green", opacity=0.8),
             name="TRIANG"
         ),
     ])
+    figure = go.Figure()
+    for i in range(x_l.shape[0]):
+        figure.add_scatter3d(
+            x=[xl_gold[i,0], x_l[i,0], xl[i,0]],
+            y=[xl_gold[i,1], x_l[i,1], xl[i,1]],
+            z=[xl_gold[i,2], x_l[i,2], xl[i,2]],
+            mode="lines+markers",
+            marker=dict(size=4,color=["blue","red","green"])
+        )
     figure.show()
 
-    computed_poses = np.zeros((num_poses,2))
+    computed_poses = np.zeros((num_poses,4))
     for i in range(num_poses):
-        computed_poses[i, :] = x_r[i, :2, 3]
+        computed_poses[i, :2] = x_r[i, :2, 3]
+        computed_poses[i, 2:] = x_r[i, :2, 0]
 
-    _, ((ax1, ax2), (ax3, ax4))= plt.subplots(2,2)
+    #_, ((ax1, ax2), (ax3, ax4))= plt.subplots(2,2)
+    _, ax1 = plt.subplots(1,1)
 
 
     ax1.title.set_text("odometry")
-    ax1.plot(odom_positions[:,0], odom_positions[:,1])
-    ax1.plot(computed_poses[:,0], computed_poses[:,1])
-    ax1.plot(true_positions[:,0], true_positions[:,1])
+    ax1.quiver(
+        odom_positions[:,0],
+        odom_positions[:,1],
+        odom_positions[:,2],
+        odom_positions[:,3],
+        color="blue",
+    )
+    ax1.quiver(
+        true_positions[:,0],
+        true_positions[:,1],
+        true_positions[:,2],
+        true_positions[:,3],
+        color="green",
+    )
+    ax1.quiver(
+        computed_poses[:,0],
+        computed_poses[:,1],
+        computed_poses[:,2],
+        computed_poses[:,3],
+        color="red",
+    )
+    ax1.legend(["Odometry","Ground Truth","Optimized"])
+    #ax1.plot(odom_positions[:,0], odom_positions[:,1])
+    #ax1.plot(computed_poses[:,0], computed_poses[:,1])
+    #ax1.plot(true_positions[:,0], true_positions[:,1])
 
-    ax2.title.set_text("projection inliers")
-    ax2.plot(proj_inliers)
+    #ax2.title.set_text("projection inliers")
+    #ax2.plot(proj_inliers)
 
-    ax3.title.set_text("chi poses")
-    ax3.plot(chi_pose_stat)
+    #ax3.title.set_text("chi poses")
+    #ax3.plot(chi_pose_stat)
 
-    ax4.title.set_text("chi projections")
-    ax4.plot(chi_proj_stat)
+    #ax4.title.set_text("chi projections")
+    #ax4.plot(chi_proj_stat)
 
     plt.show()
 

@@ -3,7 +3,8 @@ from numpy.typing import NDArray
 from utils.utils import skew, d_rot_x_0, d_rot_y_0, d_rot_z_0
 import numpy as np
 
-def pose_error_and_jacobian(
+
+def pose_error_and_jacobian_se2(
     x_ri: NDArray,
     x_rj: NDArray,
     z: NDArray
@@ -30,36 +31,10 @@ def pose_error_and_jacobian(
     dh_daz = dg_daz.flatten('F').reshape(12, 1)
 
     jacobian_rj = np.hstack((dh_dx, dh_dy, dh_daz))
+
     jacobian_ri = -jacobian_rj
 
     return error, jacobian_ri, jacobian_rj
-
-#def pose_error_and_jacobian(
-#    x_ri: NDArray,
-#    x_rj: NDArray,
-#    z: NDArray
-#) -> Tuple[NDArray, NDArray, NDArray]:
-#    z_hat = (np.linalg.inv(x_ri) @ x_rj)[:3, :]
-#    error = z_hat.flatten('F') - z[:3, :].flatten('F')
-#
-#    ri = x_ri[:3, :3]
-#    rj = x_ri[:3, :3]
-#    tj = x_rj[:3, 3]
-#
-#    d_r_x = (ri.T @ d_rot_x_0 @ rj).flatten('F').reshape(9,1)
-#    d_r_y = (ri.T @ d_rot_y_0 @ rj).flatten('F').reshape(9,1)
-#    d_r_z = (ri.T @ d_rot_z_0 @ rj).flatten('F').reshape(9,1)
-#
-#    j_xr_j = np.zeros((12, 6))
-#
-#    j_xr_j[:9,3:] = np.hstack((d_r_x, d_r_y, d_r_z))
-#    j_xr_j[9:,:3] = ri.T
-#    j_xr_j[9:,3:] = -ri.T @ skew(tj)
-#
-#    j_xr_i = -j_xr_j
-#
-#    return error, j_xr_i, j_xr_j
-
 
 
 def linearize_poses(
@@ -67,7 +42,7 @@ def linearize_poses(
     z: NDArray,
     size_dx_r: int,
     pose_association: List[Tuple[int, int]],
-    kernel_threshold: float = 2
+    kernel_threshold: float = 1
 ) -> Tuple[NDArray, NDArray, float]:
     xr_size = size_dx_r * x_r.shape[0]
 
@@ -75,8 +50,8 @@ def linearize_poses(
     b = np.zeros((xr_size, 1))
 
     omega = np.eye(12)
-    omega *= 1e3
-    #omega[:9, :9] *= 1e2
+    #omega *= 1e3
+    #omega[:9] *= 10
 
     chi = 0.0
 
@@ -86,7 +61,7 @@ def linearize_poses(
         cur_x_ri = x_r[idx_i]
         cur_x_rj = x_r[idx_j]
 
-        e, j_xr_i, j_xr_j = pose_error_and_jacobian(cur_x_ri, cur_x_rj, meas)
+        e, j_xr_i, j_xr_j = pose_error_and_jacobian_se2(cur_x_ri, cur_x_rj, meas)
 
         chi_ = e @ e
         if chi_ > kernel_threshold:
@@ -122,4 +97,4 @@ def linearize_poses(
             idx_pose_j : idx_pose_j + size_dx_r
         ] += (j_xr_j.T @ omega @ e).reshape(size_dx_r, 1)
 
-    return h, b, chi
+    return h, b, float(chi)
