@@ -4,38 +4,69 @@ from utils.utils import skew, d_rot_x_0, d_rot_y_0, d_rot_z_0
 import numpy as np
 
 
+#def pose_error_and_jacobian_se2(
+#    x_ri: NDArray,
+#    x_rj: NDArray,
+#    z: NDArray
+#) -> Tuple[NDArray, NDArray, NDArray]:
+#    ri_t = x_ri[:3, :3].T
+#    rj = x_rj[:3, :3]
+#
+#    tj = x_rj[:3, 3]
+#
+#    z_hat = (np.linalg.inv(x_ri) @ x_rj)[:3, :]
+#
+#    error = z_hat.flatten('F') - z[:3, :].flatten('F')
+#
+#    dh_dx = np.zeros((12,1))
+#    dh_dx[9 :] = (ri_t @ np.array([1, 0, 0])).reshape(3, 1)
+#
+#    dh_dy = np.zeros((12,1))
+#    dh_dy[9 :] = (ri_t @ np.array([0, 1, 0])).reshape(3, 1)
+#
+#    dg_daz = np.zeros((3, 4))
+#    dg_daz[:3, :3] = ri_t @ d_rot_z_0 @ rj
+#    dg_daz[:3, 3] = ri_t @ d_rot_z_0 @ tj
+#
+#    dh_daz = dg_daz.flatten('F').reshape(12, 1)
+#
+#    jacobian_rj = np.hstack((dh_dx, dh_dy, dh_daz))
+#
+#    jacobian_ri = -jacobian_rj
+#
+#    return error, jacobian_ri, jacobian_rj
+
 def pose_error_and_jacobian_se2(
     x_ri: NDArray,
     x_rj: NDArray,
     z: NDArray
 ) -> Tuple[NDArray, NDArray, NDArray]:
-    ri_t = x_ri[:3, :3].T
-    rj = x_rj[:3, :3]
+    ri_t = x_ri[:2, :2].T
+    rj = x_rj[:2, :2]
 
-    tj = x_rj[:3, 3]
+    tj = x_rj[:2, 2]
 
-    z_hat = (np.linalg.inv(x_ri) @ x_rj)[:3, :]
+    z_hat = (np.linalg.inv(x_ri) @ x_rj)[:2, :]
 
-    error = z_hat.flatten('F') - z[:3, :].flatten('F')
+    error = z_hat.flatten('F') - z[:2, :].flatten('F')
 
-    dh_dx = np.zeros((12,1))
-    dh_dx[9 :] = (ri_t @ np.array([1, 0, 0])).reshape(3, 1)
+    dh_dx = np.zeros((6,1))
+    dh_dx[4 :] = (ri_t @ np.array([1, 0])).reshape(2, 1)
 
-    dh_dy = np.zeros((12,1))
-    dh_dy[9 :] = (ri_t @ np.array([0, 1, 0])).reshape(3, 1)
+    dh_dy = np.zeros((6,1))
+    dh_dy[4 :] = (ri_t @ np.array([0, 1])).reshape(2, 1)
 
-    dg_daz = np.zeros((3, 4))
-    dg_daz[:3, :3] = ri_t @ d_rot_z_0 @ rj
-    dg_daz[:3, 3] = ri_t @ d_rot_z_0 @ tj
+    dg_daz = np.zeros((2, 3))
+    dg_daz[:2, :2] = ri_t @ np.array([[0, -1],[1, 0]]) @ rj
+    dg_daz[:2, 2] = ri_t @ np.array([[0, -1],[1, 0]]) @ tj
 
-    dh_daz = dg_daz.flatten('F').reshape(12, 1)
+    dh_daz = dg_daz.flatten('F').reshape(6, 1)
 
     jacobian_rj = np.hstack((dh_dx, dh_dy, dh_daz))
 
     jacobian_ri = -jacobian_rj
 
     return error, jacobian_ri, jacobian_rj
-
 
 def linearize_poses(
     x_r: NDArray,
@@ -49,9 +80,8 @@ def linearize_poses(
     h = np.zeros((xr_size, xr_size))
     b = np.zeros((xr_size, 1))
 
-    omega = np.eye(12)
-    #omega *= 1e3
-    #omega[:9] *= 10
+    omega = np.eye(6)
+    omega *= 1000
 
     chi = 0.0
 

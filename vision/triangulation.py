@@ -68,10 +68,7 @@ def triangulate_point(
     _, sigma, V = np.linalg.svd(A)
     X = V[-1]
     X /= X[3]
-    if len(sigma) != 4:
-        print(len(sigma))
-        input()
-    #if sigma[-1] / sigma[0] > 1e-2:
+    #if sigma[-1] / sigma[0] > 1e-1:
     #    return False, -np.ones(3)
 
     triang_point = X[:3]
@@ -155,7 +152,7 @@ def triangulate_points_from_all_observations(
             points[p].append(i)
 
     # Filter out points visible in only one observation
-    v_points = filter(lambda p: len(points[p]) >= 2, points)
+    v_points = filter(lambda p: len(points[p]) >= 8, points)
 
     # Triangulate point from all observation where a correspondence appears
     for point in v_points:

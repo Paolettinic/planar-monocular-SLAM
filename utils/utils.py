@@ -1,6 +1,18 @@
 import numpy as np
 from numpy.typing import NDArray
 
+def v2t_se2(vector: NDArray) -> NDArray:
+    """
+    vector to transformation in se(2)
+    Args:
+        - vector (`NDArray`) : 3d vector that parametrizes a SE(2)
+            transformation
+    """
+    T = np.eye(3)
+    T[:2,:2] = rot_z_se2(vector[2])
+    T[:2, 2] = vector[:2]
+    return T
+
 def v2t(vector: NDArray) -> NDArray:
     """
     vector to transformation
@@ -38,6 +50,12 @@ def rot_z(angle: float) -> NDArray:
         [np.cos(angle), -np.sin(angle), 0],
         [np.sin(angle), np.cos(angle),  0],
         [0,             0,              1]
+    ])
+
+def rot_z_se2(angle: float) -> NDArray:
+    return np.array([
+        [np.cos(angle), -np.sin(angle)],
+        [np.sin(angle), np.cos(angle)],
     ])
 
 d_rot_x_0 = np.array([

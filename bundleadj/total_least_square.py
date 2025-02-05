@@ -3,7 +3,7 @@ import numpy as np
 from numpy.typing import NDArray
 from vision.cameramodel import CameraModel
 from observation import Observation
-from utils.utils import se2_to_se3_vec, v2t
+from utils.utils import se2_to_se3_vec, v2t, v2t_se2
 from tqdm import tqdm
 from .pose import linearize_poses
 from .projection import linearize_projections
@@ -31,11 +31,11 @@ def boxplus(
 
     for i in range(size_xr):
         dxr_i = delta_xr[i * size_dx_r : i * size_dx_r + size_dx_r]
-        if size_dx_r == 3:
-            dxr_i = se2_to_se3_vec(
-                delta_xr[i * size_dx_r : i * size_dx_r + size_dx_r]
-            )
-        dxr = v2t(dxr_i)
+        #if size_dx_r == 3:
+        #    dxr_i = se2_to_se3_vec(
+        #        delta_xr[i * size_dx_r : i * size_dx_r + size_dx_r]
+        #    )
+        dxr = v2t_se2(dxr_i)
         new_xr[i, :, :] = dxr @ x_r[i, :, :]
 
     for i in range(size_xl):
@@ -101,6 +101,7 @@ def total_least_square(
 
         dx = np.zeros((system_size, 1))
 
+        # keep the first pose fixed
         dx[dxr_size :] = -np.linalg.solve(
             h[dxr_size :, dxr_size :], b[dxr_size :]
         )
@@ -125,17 +126,17 @@ def bundle_adjustment(
     num_poses = len(observations)
     num_points = len(triangulated_points)
 
-    xr = np.zeros((num_poses, 4, 4))
-    xl = np.zeros((len(triangulated_points), 3))
+    xr_guess = np.zeros((num_poses, 3, 3))
+    xl_guess = np.zeros((len(triangulated_points), 3))
 
     xl_gold = np.zeros((len(true_points), 3))
     for index, pt_id in enumerate(sorted(triangulated_points)):
         point_to_index[pt_id] = index
         index_to_point[index] = pt_id
-        xl[index] = triangulated_points[pt_id]
+        xl_guess[index] = triangulated_points[pt_id]
         xl_gold[index] = true_points[pt_id]
 
-    z_odom = np.zeros((num_poses - 1, 4, 4))
+    z_odom = np.zeros((num_poses - 1, 3, 3))
     z_proj = np.zeros((num_poses * num_points, 2))
 
     pose_association = []
@@ -159,12 +160,12 @@ def bundle_adjustment(
     num_proj = 0
 
     for i in range(num_poses):
-        xr[i,:,:] = v2t(se2_to_se3_vec(np.array(
+        xr_guess[i,:,:] = v2t_se2(np.array(
             [*observations[i].odom_pos, observations[i].odom_angle]
             #[*observations[i].gt_pos, observations[i].gt_angle]
-        )))
+        ))
         if i > 0:
-            z_odom[i - 1, :, :] = np.linalg.inv(xr[i - 1]) @ xr[i]
+            z_odom[i - 1, :, :] = np.linalg.inv(xr_guess[i - 1]) @ xr_guess[i]
             pose_association.append((i - 1, i))
         odom_positions[i, :] = np.array([
             *observations[i].odom_pos,
@@ -190,8 +191,8 @@ def bundle_adjustment(
 
 
     x_r, x_l, chi_pose_stat, chi_proj_stat, proj_inliers = total_least_square(
-        x_r=xr,
-        x_l=xl,
+        x_r=xr_guess,
+        x_l=xl_guess,
         z_proj=z_proj,
         z_odom=z_odom,
         dxr_size=3,
@@ -202,50 +203,24 @@ def bundle_adjustment(
         iterations=iterations
     )
 
-    figure = go.Figure(data=[
-        go.Scatter3d(
-            x=xl_gold[:, 0],
-            y=xl_gold[:, 1],
-            z=xl_gold[:, 2],
-            mode="markers",
-            marker=dict(size=4,color="blue"),
-            name="GT"
-        ),
-        go.Scatter3d(
-            x=x_l[:, 0],
-            y=x_l[:, 1],
-            z=x_l[:, 2],
-            mode="markers",
-            marker=dict(size=4,color="red", opacity=0.8),
-            name="OPT"
-        ),
-        go.Scatter3d(
-            x=xl[:, 0],
-            y=xl[:, 1],
-            z=xl[:, 2],
-            mode="markers",
-            marker=dict(size=4,color="green", opacity=0.8),
-            name="TRIANG"
-        ),
-    ])
     figure = go.Figure()
     for i in range(x_l.shape[0]):
         figure.add_scatter3d(
-            x=[xl_gold[i,0], x_l[i,0], xl[i,0]],
-            y=[xl_gold[i,1], x_l[i,1], xl[i,1]],
-            z=[xl_gold[i,2], x_l[i,2], xl[i,2]],
+            x=[xl_gold[i, 0], x_l[i, 0], xl_guess[i, 0]],
+            y=[xl_gold[i, 1], x_l[i, 1], xl_guess[i, 1]],
+            z=[xl_gold[i, 2], x_l[i, 2], xl_guess[i, 2]],
             mode="lines+markers",
-            marker=dict(size=4,color=["blue","red","green"])
+            marker=dict(size=4,color=["green","orange","blue"])
         )
     figure.show()
 
     computed_poses = np.zeros((num_poses,4))
     for i in range(num_poses):
-        computed_poses[i, :2] = x_r[i, :2, 3]
+        computed_poses[i, :2] = x_r[i, :2, 2]
         computed_poses[i, 2:] = x_r[i, :2, 0]
 
-    #_, ((ax1, ax2), (ax3, ax4))= plt.subplots(2,2)
-    _, ax1 = plt.subplots(1,1)
+    _, ((ax1, ax2), (ax3, ax4))= plt.subplots(2,2)
+    #_, ax1 = plt.subplots(1,1)
 
 
     ax1.title.set_text("odometry")
@@ -271,18 +246,18 @@ def bundle_adjustment(
         color="red",
     )
     ax1.legend(["Odometry","Ground Truth","Optimized"])
-    #ax1.plot(odom_positions[:,0], odom_positions[:,1])
-    #ax1.plot(computed_poses[:,0], computed_poses[:,1])
-    #ax1.plot(true_positions[:,0], true_positions[:,1])
+    ax1.plot(odom_positions[:,0], odom_positions[:,1])
+    ax1.plot(computed_poses[:,0], computed_poses[:,1])
+    ax1.plot(true_positions[:,0], true_positions[:,1])
 
-    #ax2.title.set_text("projection inliers")
-    #ax2.plot(proj_inliers)
+    ax2.title.set_text("projection inliers")
+    ax2.plot(proj_inliers)
 
-    #ax3.title.set_text("chi poses")
-    #ax3.plot(chi_pose_stat)
+    ax3.title.set_text("chi poses")
+    ax3.plot(chi_pose_stat)
 
-    #ax4.title.set_text("chi projections")
-    #ax4.plot(chi_proj_stat)
+    ax4.title.set_text("chi projections")
+    ax4.plot(chi_proj_stat)
 
     plt.show()
 

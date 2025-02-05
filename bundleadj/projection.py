@@ -6,13 +6,17 @@ import numpy as np
 
 
 def projection_error_and_jacobian_se2(
-    x_r: NDArray,
+    x_r_se2: NDArray,
     x_l: NDArray,
     z:NDArray,
     size_dx_r: int,
     size_dx_l: int,
     camera: CameraModel
 ) -> Tuple[bool, NDArray, NDArray, NDArray]:
+    x_r = np.eye(4)
+    x_r[:2, :2] = x_r_se2[:2, :2]
+    x_r[:2,  2] = x_r_se2[:2,  2]
+
     jwr = np.zeros((3, size_dx_r))
     jwl = np.zeros((3, size_dx_l))
     error = np.zeros(2)
@@ -63,7 +67,7 @@ def linearize_projections(
     size_dx_l: int,
     proj_association: List[Tuple[int, int]],
     camera_model: CameraModel,
-    kernel_threshold: float = 10
+    kernel_threshold: float = 5
 ) -> Tuple[NDArray, NDArray, float, int]:
     xr_size = size_dx_r * x_r.shape[0]
     xl_size = size_dx_l * x_l.shape[0]
@@ -74,7 +78,7 @@ def linearize_projections(
     chi = 0.0
     num_inliers = 0
     omega_proj = np.eye(2)
-    #omega_proj *= 1e-2
+    omega_proj *= 1e-2
 
     for i, proj in enumerate(z):
 
@@ -86,7 +90,7 @@ def linearize_projections(
         index_land_matrix = xr_size + idx_land * size_dx_l
 
         valid, e, jxr, jxl = projection_error_and_jacobian_se2(
-            x_r=cur_xr,
+            x_r_se2=cur_xr,
             x_l=cur_xl,
             z=proj,
             size_dx_r=size_dx_r,
