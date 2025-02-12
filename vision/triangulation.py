@@ -49,12 +49,6 @@ def triangulate_point(
             observation.odom_angle
         )
 
-        # Test with ground truth position and orientation
-        #proj_matrix = camera_model.get_projection_matrix(
-        #    observation.gt_pos,
-        #    observation.gt_angle
-        #)
-
         assert point_id in observation.image_points,\
             f"One observation does not contain the point with id: {point_id}"
 
@@ -62,25 +56,24 @@ def triangulate_point(
 
         # Computer Vision: Algorithms and Applications, Szeliski
         # Chap. 7.1 eq. 7.5, 7.6
-        A[2*i, :] = u * proj_matrix[2, :] - proj_matrix[0, :]
-        A[2*i + 1, :] = v * proj_matrix[2, :] - proj_matrix[1, :]
+        A[2 * i] = u * proj_matrix[2] - proj_matrix[0]
+        A[2 * i + 1] = v * proj_matrix[2] - proj_matrix[1]
 
-    _, sigma, V = np.linalg.svd(A)
+    _, _, V = np.linalg.svd(A)
     X = V[-1]
     X /= X[3]
-    #if sigma[-1] / sigma[0] > 1e-1:
-    #    return False, -np.ones(3)
 
     triang_point = X[:3]
-    visible = [
-        camera_model.project_pt_world(
-            point_world=triang_point,
-            position=observation.odom_pos,
-            rotation=observation.odom_angle
-        )[-1] for observation in observations
-    ]
-    if not any(visible):
-        return False, -np.ones(3)
+
+    #visible = [
+    #    camera_model.project_pt_world(
+    #        point_world=triang_point,
+    #        position=observation.odom_pos,
+    #        rotation=observation.odom_angle
+    #    )[-1] for observation in observations
+    #]
+    #if not any(visible):
+    #    return False, -np.ones(3)
 
     return True, triang_point
 
@@ -151,8 +144,8 @@ def triangulate_points_from_all_observations(
                 points[p] = []
             points[p].append(i)
 
-    # Filter out points visible in only one observation
-    v_points = filter(lambda p: len(points[p]) >= 8, points)
+    # Filter out points visible in less than 4 observations
+    v_points = filter(lambda p: len(points[p]) >= 4, points)
 
     # Triangulate point from all observation where a correspondence appears
     for point in v_points:

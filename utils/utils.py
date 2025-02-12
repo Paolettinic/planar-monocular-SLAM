@@ -75,6 +75,10 @@ d_rot_z_0 = np.array([
     [ 1, 0, 0],
     [ 0, 0, 0]
 ])
+d_rot_z_0_se2 = np.array([
+    [ 0,-1],
+    [ 1, 0]
+])
 
 def skew(vector: NDArray) -> NDArray:
     assert vector.shape == (3,) or vector.shape == (3,1)

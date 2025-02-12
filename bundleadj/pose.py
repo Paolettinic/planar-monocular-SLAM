@@ -1,68 +1,50 @@
 from typing import Tuple, List
 from numpy.typing import NDArray
-from utils.utils import skew, d_rot_x_0, d_rot_y_0, d_rot_z_0
+from utils.utils import d_rot_z_0_se2
 import numpy as np
 
-
-#def pose_error_and_jacobian_se2(
-#    x_ri: NDArray,
-#    x_rj: NDArray,
-#    z: NDArray
-#) -> Tuple[NDArray, NDArray, NDArray]:
-#    ri_t = x_ri[:3, :3].T
-#    rj = x_rj[:3, :3]
-#
-#    tj = x_rj[:3, 3]
-#
-#    z_hat = (np.linalg.inv(x_ri) @ x_rj)[:3, :]
-#
-#    error = z_hat.flatten('F') - z[:3, :].flatten('F')
-#
-#    dh_dx = np.zeros((12,1))
-#    dh_dx[9 :] = (ri_t @ np.array([1, 0, 0])).reshape(3, 1)
-#
-#    dh_dy = np.zeros((12,1))
-#    dh_dy[9 :] = (ri_t @ np.array([0, 1, 0])).reshape(3, 1)
-#
-#    dg_daz = np.zeros((3, 4))
-#    dg_daz[:3, :3] = ri_t @ d_rot_z_0 @ rj
-#    dg_daz[:3, 3] = ri_t @ d_rot_z_0 @ tj
-#
-#    dh_daz = dg_daz.flatten('F').reshape(12, 1)
-#
-#    jacobian_rj = np.hstack((dh_dx, dh_dy, dh_daz))
-#
-#    jacobian_ri = -jacobian_rj
-#
-#    return error, jacobian_ri, jacobian_rj
-
-def pose_error_and_jacobian_se2(
+def pose_error_and_jacobian(
     x_ri: NDArray,
     x_rj: NDArray,
+    size_dx_r: int,
     z: NDArray
 ) -> Tuple[NDArray, NDArray, NDArray]:
-    ri_t = x_ri[:2, :2].T
-    rj = x_rj[:2, :2]
+    """
+    Computes the pose error and Jacobians for a relative SE(2) odometry
+        measurement.
 
+    Args:
+        x_ri (`NDArray`): The first robot pose in SE(2), represented as a 3x3
+            transformation matrix.
+        x_rj (`NDArray`): The second robot pose in SE(2), represented as a 3x3
+            transformation matrix.
+        size_dx_r (`int`): The size of the perturbation vector for the robot
+            pose.
+        z (`NDArray`): The measured relative transformation between `x_ri` and
+            `x_rj`, represented as a 3x3 transformation matrix.
+
+    Returns:
+        `Tuple[NDArray, NDArray, NDArray]`:
+            - `NDArray`: The 6x1 error vector between the estimated and
+                measured relative transformation.
+            - `NDArray`: The 6x3 Jacobian of the error with respect to `x_ri`.
+            - `NDArray`: The 6x3 Jacobian of the error with respect to `x_rj`.
+    """
+    ri = x_ri[:2, :2]
+    ti = x_ri[:2, 2]
+    rj = x_rj[:2, :2]
     tj = x_rj[:2, 2]
 
-    z_hat = (np.linalg.inv(x_ri) @ x_rj)[:2, :]
+    z_hat = np.zeros((2, 3))
+    z_hat[:2, :2] = ri.T @ rj
+    z_hat[:2,  2] = ri.T @ (tj - ti)
 
-    error = z_hat.flatten('F') - z[:2, :].flatten('F')
+    error = (z_hat - z[:2]).flatten("F")
 
-    dh_dx = np.zeros((6,1))
-    dh_dx[4 :] = (ri_t @ np.array([1, 0])).reshape(2, 1)
-
-    dh_dy = np.zeros((6,1))
-    dh_dy[4 :] = (ri_t @ np.array([0, 1])).reshape(2, 1)
-
-    dg_daz = np.zeros((2, 3))
-    dg_daz[:2, :2] = ri_t @ np.array([[0, -1],[1, 0]]) @ rj
-    dg_daz[:2, 2] = ri_t @ np.array([[0, -1],[1, 0]]) @ tj
-
-    dh_daz = dg_daz.flatten('F').reshape(6, 1)
-
-    jacobian_rj = np.hstack((dh_dx, dh_dy, dh_daz))
+    jacobian_rj = np.zeros((6, 3))
+    jacobian_rj[4 :, : 2] = ri.T
+    jacobian_rj[: 4, 2] = (ri.T @ d_rot_z_0_se2  @ rj).flatten("F")
+    jacobian_rj[4 :, 2] = (ri.T @ d_rot_z_0_se2  @ tj).flatten("F")
 
     jacobian_ri = -jacobian_rj
 
@@ -73,29 +55,34 @@ def linearize_poses(
     z: NDArray,
     size_dx_r: int,
     pose_association: List[Tuple[int, int]],
-    kernel_threshold: float = 1
+    kernel_threshold: float = 1e-1
 ) -> Tuple[NDArray, NDArray, float]:
     xr_size = size_dx_r * x_r.shape[0]
 
     h = np.zeros((xr_size, xr_size))
     b = np.zeros((xr_size, 1))
 
-    omega = np.eye(6)
-    omega *= 1000
-
     chi = 0.0
 
-    for i, meas in enumerate(z):
+    for i, z_odom in enumerate(z):
+        omega_pose = np.eye(6)
+        #omega_pose *= 1e3
+
         idx_i, idx_j = pose_association[i]
 
         cur_x_ri = x_r[idx_i]
         cur_x_rj = x_r[idx_j]
 
-        e, j_xr_i, j_xr_j = pose_error_and_jacobian_se2(cur_x_ri, cur_x_rj, meas)
+        e, j_xr_i, j_xr_j = pose_error_and_jacobian(
+            x_ri=cur_x_ri,
+            x_rj=cur_x_rj,
+            z=z_odom,
+            size_dx_r=size_dx_r
+        )
 
-        chi_ = e @ e
+        chi_ = e @ omega_pose @ e
         if chi_ > kernel_threshold:
-            e *= np.sqrt(kernel_threshold / chi_)
+            omega_pose *= np.sqrt(kernel_threshold / chi_)
             chi_ = kernel_threshold
         chi += chi_
 
@@ -105,26 +92,26 @@ def linearize_poses(
         h[
             idx_pose_i : idx_pose_i + size_dx_r,
             idx_pose_i : idx_pose_i + size_dx_r
-        ] += j_xr_i.T @ omega @ j_xr_i
+        ] += j_xr_i.T @ omega_pose @ j_xr_i
         h[
             idx_pose_i : idx_pose_i + size_dx_r,
             idx_pose_j : idx_pose_j + size_dx_r
-        ] += j_xr_i.T @ omega @ j_xr_j
+        ] += j_xr_i.T @ omega_pose @ j_xr_j
         h[
             idx_pose_j : idx_pose_j + size_dx_r,
             idx_pose_i : idx_pose_i + size_dx_r
-        ] += j_xr_j.T @ omega @ j_xr_i
+        ] += j_xr_j.T @ omega_pose @ j_xr_i
         h[
             idx_pose_j : idx_pose_j + size_dx_r,
             idx_pose_j : idx_pose_j + size_dx_r
-        ] += j_xr_j.T @ omega @ j_xr_j
+        ] += j_xr_j.T @ omega_pose @ j_xr_j
 
 
         b[
             idx_pose_i : idx_pose_i + size_dx_r
-        ] += (j_xr_i.T @ omega @ e).reshape(size_dx_r, 1)
+        ] += (j_xr_i.T @ omega_pose @ e).reshape(size_dx_r, 1)
         b[
             idx_pose_j : idx_pose_j + size_dx_r
-        ] += (j_xr_j.T @ omega @ e).reshape(size_dx_r, 1)
+        ] += (j_xr_j.T @ omega_pose @ e).reshape(size_dx_r, 1)
 
     return h, b, float(chi)

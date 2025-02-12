@@ -5,7 +5,7 @@ from numpy.typing import NDArray
 import numpy as np
 
 
-def projection_error_and_jacobian_se2(
+def projection_error_and_jacobian(
     x_r_se2: NDArray,
     x_l: NDArray,
     z:NDArray,
@@ -13,9 +13,33 @@ def projection_error_and_jacobian_se2(
     size_dx_l: int,
     camera: CameraModel
 ) -> Tuple[bool, NDArray, NDArray, NDArray]:
+    """
+    Computes the projection error and Jacobians for a landmark observed in a
+    camera frame.
+
+    Args:
+        x_r_se2 (`NDArray`): The robot pose in SE(2) represented as a 3x3
+            transformation matrix.
+        x_l (`NDArray`): The landmark position in world coordinates (3D point).
+        z (`NDArray`): The observed landmark in image coordinates.
+        size_dx_r (`int`): The size of the perturbation vector for the robot
+            pose.
+        size_dx_l (`int`): The size of the perturbation vector for the landmark
+            position.
+        camera (`CameraModel`): The camera model
+
+    Returns:
+        `Tuple[bool, NDArray, NDArray, NDArray]`:
+            - A boolean indicating whether the landmark is within the camera's
+                field of view.
+            - A 2D error vector representing the difference between projected
+                and observed points.
+            - The Jacobian of the error with respect to the robot pose.
+            - The Jacobian of the error with respect to the landmark position.
+    """
     x_r = np.eye(4)
     x_r[:2, :2] = x_r_se2[:2, :2]
-    x_r[:2,  2] = x_r_se2[:2,  2]
+    x_r[:2,  3] = x_r_se2[:2,  2]
 
     jwr = np.zeros((3, size_dx_r))
     jwl = np.zeros((3, size_dx_l))
@@ -24,15 +48,16 @@ def projection_error_and_jacobian_se2(
     x_r_c = camera.inv_cam_transform
     K = camera.intrinsic_matrix
 
-    x_w_c = x_r_c @ np.linalg.inv(x_r) #cXr @ (wXr)^(-1)
+    x_w_c = x_r_c @ np.linalg.inv(x_r)
     ir = x_w_c[:3, :3]
     it = x_w_c[:3 , 3]
 
     p_cam = ir @ x_l + it # point in camera frame
-    p_img = K @ p_cam # point in image
+    p_img = K @ p_cam # point in image frame
     fz = 1 / p_img[2]
-    fz2 = np.pow(fz, 2)
+    fz2 = fz ** 2
     z_proj = (p_img * fz)[:2]
+
     # visibility check
     if (
         p_cam[2] < camera.z_near or
@@ -48,13 +73,13 @@ def projection_error_and_jacobian_se2(
     error = z_proj - z
 
     jacobian_proj = np.array([
-        [fz, 0, -p_img[0] / fz2],
-        [0, fz, -p_img[1] / fz2],
+        [fz, 0, -p_img[0] * fz2],
+        [0, fz, -p_img[1] * fz2],
     ])
-    d_rot_t_z_0 = -d_rot_z_0  # d_rot_z_0 is skew -> negative = transpose
+    d_rot_z_0_t = -d_rot_z_0  # d_rot_z_0 is skew -> negative = transpose
 
     jwr[:3, :2] = -ir @ np.eye(3,2)
-    jwr[:3, 2] = ir @ d_rot_t_z_0 @ x_l
+    jwr[:3, 2] = ir @ d_rot_z_0_t @ x_l
     jwl = ir
     return True, error, jacobian_proj @ K @ jwr, jacobian_proj @ K @ jwl
 
@@ -67,7 +92,7 @@ def linearize_projections(
     size_dx_l: int,
     proj_association: List[Tuple[int, int]],
     camera_model: CameraModel,
-    kernel_threshold: float = 5
+    kernel_threshold: float = 1e3
 ) -> Tuple[NDArray, NDArray, float, int]:
     xr_size = size_dx_r * x_r.shape[0]
     xl_size = size_dx_l * x_l.shape[0]
@@ -75,12 +100,11 @@ def linearize_projections(
 
     h = np.zeros((system_size, system_size))
     b = np.zeros((system_size, 1))
-    chi = 0.0
+    chi = 0
     num_inliers = 0
-    omega_proj = np.eye(2)
-    omega_proj *= 1e-2
 
-    for i, proj in enumerate(z):
+    for i, z_proj in enumerate(z):
+        omega_proj = np.eye(2)
 
         idx_pose, idx_land = proj_association[i]
         cur_xr = x_r[idx_pose]
@@ -89,10 +113,10 @@ def linearize_projections(
         index_pose_matrix = idx_pose * size_dx_r
         index_land_matrix = xr_size + idx_land * size_dx_l
 
-        valid, e, jxr, jxl = projection_error_and_jacobian_se2(
+        valid, e, jxr, jxl = projection_error_and_jacobian(
             x_r_se2=cur_xr,
             x_l=cur_xl,
-            z=proj,
+            z=z_proj,
             size_dx_r=size_dx_r,
             size_dx_l=size_dx_l,
             camera=camera_model
@@ -101,10 +125,10 @@ def linearize_projections(
         if not valid:
             continue
 
-        chi_ = e @ e
+        chi_ = e @ omega_proj @ e
 
         if chi_ > kernel_threshold:
-            e *= np.sqrt(kernel_threshold / chi_)
+            omega_proj *= np.sqrt(kernel_threshold / chi_)
             chi_ = kernel_threshold
         else:
             num_inliers += 1
