@@ -17,6 +17,7 @@ Probabilistic Robotics Project
     ```
 
 ## Results
-![results](output/out.svg "Results")\
+![TLSresults](output/out.svg "Results")
+![SCATTERresults](output/scatter.svg "Results")
 
 
