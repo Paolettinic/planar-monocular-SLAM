@@ -117,6 +117,7 @@ def bundle_adjustment(
         ],
     )
     figure.show()
+    figure.write_image("output/scatter.svg")
     figure.write_html("output/scatter.html", full_html=False, include_plotlyjs='cdn')
 
     computed_poses = np.zeros((num_poses,4))
