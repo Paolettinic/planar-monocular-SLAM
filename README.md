@@ -16,4 +16,8 @@ Probabilistic Robotics Project
     python main.py
     ```
 
+## Results
+![results](output/out.svg "Results")\
+{% include_relative "output/scatter.html" %}
+
 

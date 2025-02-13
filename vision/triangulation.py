@@ -1,6 +1,6 @@
-from .cameramodel import CameraModel
+from vision import CameraModel
 from typing import List, Dict, Tuple
-from observation import Observation
+from file_handler import Observation
 from numpy.typing import NDArray
 from enum import Enum, auto
 import itertools

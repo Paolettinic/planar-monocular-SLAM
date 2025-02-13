@@ -1,5 +1,5 @@
 from utils.utils import d_rot_z_0
-from vision.cameramodel import CameraModel
+from vision import CameraModel
 from typing import Tuple, List
 from numpy.typing import NDArray
 import numpy as np
@@ -94,12 +94,38 @@ def linearize_projections(
     camera_model: CameraModel,
     kernel_threshold: float = 1e3
 ) -> Tuple[NDArray, NDArray, float, int]:
+    """
+    Constructs the linearized system for the pose-projection constraint of the
+    factor graph
+
+    Args:
+        - x_r (`NDArray`): The array of robot poses in `SE(2)`, each
+            represented as a `3x3` transformation matrix.
+        - x_l (`NDArray`): The array of landmark positions in world coordinates
+        - z (`NDArray`): The landmark measurements in image coordinates
+        - size_dx_r (`int`): The size of the pose perturbation vector
+        - size_dx_l (`int`): The size of the landmark perturbation vector
+        - proj_association (`List[Tuple[int, int]]`): A list of associations
+            between poses and landmarks; e.g. (n, m) means that the landmark m
+            was observed in pose n
+        - camera_model (`CameraModel`): The camera model
+        - kernel_threshold (`float`, optional): The threshold for the robust
+            kernel. Defaults to `1000`.
+
+    Returns:
+        `Tuple[NDArray, NDArray, float, int]`:
+            - `NDArray`: The matrix `H` of the linearized system.
+            - `NDArray`: The vector `b` of the linearized system.
+            - `float`: Residual
+            - `int`: The number of inliers (measurements that fall within the
+                kernel threshold).
+    """
     xr_size = size_dx_r * x_r.shape[0]
     xl_size = size_dx_l * x_l.shape[0]
     system_size = xr_size + xl_size
 
     h = np.zeros((system_size, system_size))
-    b = np.zeros((system_size, 1))
+    b = np.zeros(system_size)
     chi = 0
     num_inliers = 0
 
@@ -154,10 +180,10 @@ def linearize_projections(
 
         b[
             index_pose_matrix : index_pose_matrix + size_dx_r
-        ] += (jxr.T @ omega_proj @ e).reshape(size_dx_r, 1)
+        ] += jxr.T @ omega_proj @ e
         b[
             index_land_matrix : index_land_matrix + size_dx_l
-        ] += (jxl.T @ omega_proj @ e).reshape(size_dx_l, 1)
+        ] += jxl.T @ omega_proj @ e
 
 
     return h, b, float(chi), num_inliers

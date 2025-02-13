@@ -41,7 +41,7 @@ def pose_error_and_jacobian(
 
     error = (z_hat - z[:2]).flatten("F")
 
-    jacobian_rj = np.zeros((6, 3))
+    jacobian_rj = np.zeros((6, size_dx_r))
     jacobian_rj[4 :, : 2] = ri.T
     jacobian_rj[: 4, 2] = (ri.T @ d_rot_z_0_se2  @ rj).flatten("F")
     jacobian_rj[4 :, 2] = (ri.T @ d_rot_z_0_se2  @ tj).flatten("F")
@@ -57,10 +57,32 @@ def linearize_poses(
     pose_association: List[Tuple[int, int]],
     kernel_threshold: float = 1e-1
 ) -> Tuple[NDArray, NDArray, float]:
+    """
+    Constructs the linearized system for the pose-pose constraint of the factor
+    graph
+
+    Args:
+        - x_r (`NDArray`): The array of robot poses in `SE(2)`, each
+            represented as a `3x3` transformation matrix.
+        - z (`NDArray`): The odometry measurements between one pose and the
+            next
+        - size_dx_r (`int`): The size of the pose perturbation vector
+        - pose_association (`List[Tuple[int, int]]`): A list of associations
+            between poses; (n, m) means that there's a measurement of the
+            odometry from pose n to pose m.
+        - kernel_threshold (`float`, optional): The threshold for the robust
+            kernel. Defaults to `0.1`.
+
+    Returns:
+        `Tuple[NDArray, NDArray, float, int]`:
+            - `NDArray`: The matrix `H` of the linearized system.
+            - `NDArray`: The vector `b` of the linearized system.
+            - `float`: Residual
+    """
     xr_size = size_dx_r * x_r.shape[0]
 
     h = np.zeros((xr_size, xr_size))
-    b = np.zeros((xr_size, 1))
+    b = np.zeros(xr_size)
 
     chi = 0.0
 
@@ -109,9 +131,9 @@ def linearize_poses(
 
         b[
             idx_pose_i : idx_pose_i + size_dx_r
-        ] += (j_xr_i.T @ omega_pose @ e).reshape(size_dx_r, 1)
+        ] += j_xr_i.T @ omega_pose @ e
         b[
             idx_pose_j : idx_pose_j + size_dx_r
-        ] += (j_xr_j.T @ omega_pose @ e).reshape(size_dx_r, 1)
+        ] += j_xr_j.T @ omega_pose @ e
 
     return h, b, float(chi)
