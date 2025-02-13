@@ -116,9 +116,7 @@ def bundle_adjustment(
             ),
         ],
     )
-    figure.show()
-    figure.write_image("output/scatter.svg")
-    figure.write_html("output/scatter.html", full_html=False, include_plotlyjs='cdn')
+
 
     computed_poses = np.zeros((num_poses,4))
     for i in range(num_poses):
@@ -164,4 +162,18 @@ def bundle_adjustment(
     ax4.plot(chi_proj_stat)
 
     plt.savefig("output/out.svg", format="svg", dpi=80)
-    plt.show()
+    plt.ion()
+    plt.show(block=False)
+    print("Optimization completed.")
+    ans = input(
+        "Do you want to visualize the landmarks in your browser? [Y/n]: "
+    )
+    if ans in ["Y","y",""]:
+        figure.show()
+    print("SVG and HTML saved in the output folder")
+    figure.write_image("output/scatter.svg")
+    figure.write_html(
+        "output/scatter.html",
+        full_html=False,
+        include_plotlyjs='cdn'
+    )
