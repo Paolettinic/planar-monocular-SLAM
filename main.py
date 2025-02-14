@@ -84,11 +84,13 @@ def main(args) -> None:
     for point in true_points:
         xl_true[result.point_to_index[point]] = true_points[point]
         xl_guess[result.point_to_index[point]] = p_triang[point]
+
+    # Computing resulting error
     rmse_angle, rmse_position = compute_pose_error(result.x_r, true_poses)
     landmark_error = compute_landmark_error(result.x_l, xl_true)
     print("Pose error")
-    print("Rotation:",f"{rmse_angle:.>10}")
-    print("Translation:",f"{rmse_position[0]:.>10}",f"{rmse_position[1]:.>2}")
+    print(f"{'Rotation:':.<20}",f"{rmse_angle}")
+    print(f"{'Translation:':.<20}",f"x:{rmse_position[0]:.>20}",f"y:{rmse_position[1]}")
     print("Landmark_error")
     print("RMSE:",landmark_error[0], landmark_error[1], landmark_error[2])
 
