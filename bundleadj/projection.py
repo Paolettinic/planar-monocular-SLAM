@@ -1,4 +1,4 @@
-from utils.utils import d_rot_z_0
+from utils.geometry import d_rot_z_0, se2_to_se3
 from vision import CameraModel
 from typing import Tuple, List
 from numpy.typing import NDArray
@@ -37,9 +37,7 @@ def projection_error_and_jacobian(
             - The Jacobian of the error with respect to the robot pose.
             - The Jacobian of the error with respect to the landmark position.
     """
-    x_r = np.eye(4)
-    x_r[:2, :2] = x_r_se2[:2, :2]
-    x_r[:2,  3] = x_r_se2[:2,  2]
+    x_r = se2_to_se3(x_r_se2)
 
     jwr = np.zeros((3, size_dx_r))
     jwl = np.zeros((3, size_dx_l))

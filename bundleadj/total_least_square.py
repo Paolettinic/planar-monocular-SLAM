@@ -2,7 +2,7 @@ import numpy as np
 from typing import List, Tuple
 from numpy.typing import NDArray
 from vision.cameramodel import CameraModel
-from utils.utils import v2t_se2
+from utils.geometry import v2t_se2
 from tqdm import trange
 from .pose import linearize_poses
 from .projection import linearize_projections
@@ -45,7 +45,7 @@ def total_least_square(
     camera_model: CameraModel,
     iterations: int = 20,
     damping: float = 1e-4
-) -> Tuple[NDArray, NDArray, NDArray, NDArray, NDArray]:
+) -> Tuple[NDArray, NDArray, NDArray, NDArray, NDArray, NDArray]:
     """
     Performs the total least squares optimization for a pose-projeciton
     problem
@@ -76,9 +76,10 @@ def total_least_square(
         `Tuple[NDArray, NDArray, NDArray, NDArray, NDArray]`:
             - `NDArray`: The optimized robot poses.
             - `NDArray`: The optimized landmark positions.
-            - `NDArray`: The final Hessian matrix `H` of the system.
-            - `NDArray`: The final gradient vector `b`.
-            - `NDArray`: The history of chi-squared errors over iterations.
+            - `NDArray`: The history of pose residual over iterations.
+            - `NDArray`: The history of projection residual over iterations.
+            - `NDArray`: The history of pose inliners over iterations.
+            - `NDArray`: The history of projection inliners over iterations.
     """
 
     xr_size = size_dx_r * x_r.shape[0]
@@ -88,7 +89,8 @@ def total_least_square(
     chi_proj_stat = np.zeros(iterations)
     chi_pose_stat = np.zeros(iterations)
 
-    inliers_p = np.zeros(iterations)
+    inliers_proj = np.zeros(iterations)
+    inliers_pose = np.zeros(iterations)
 
     t_iterations = trange(iterations, desc="TLS Iteration")
 
@@ -97,7 +99,7 @@ def total_least_square(
         b = np.zeros(system_size)
         dx = np.zeros(system_size)
 
-        h_proj, b_proj, chi_proj_stat[i], inliers_p[i] = linearize_projections(
+        h_proj, b_proj, chi_proj_stat[i], inliers_proj[i] = linearize_projections(
             x_r=x_r,
             x_l=x_l,
             z=z_proj,
@@ -107,7 +109,7 @@ def total_least_square(
             camera_model=camera_model
         )
 
-        h_pose, b_pose, chi_pose_stat[i] = linearize_poses(
+        h_pose, b_pose, chi_pose_stat[i], inliers_pose[i] = linearize_poses(
             x_r=x_r,
             z=z_odom,
             size_dx_r=size_dx_r,
@@ -132,7 +134,7 @@ def total_least_square(
         t_iterations.set_postfix({"error":error})
         x_r, x_l = boxplus(x_r, x_l, size_dx_r, size_dx_l, dx)
 
-    return x_r, x_l, chi_pose_stat, chi_proj_stat, inliers_p
+    return x_r, x_l, chi_pose_stat, chi_proj_stat, inliers_proj, inliers_pose
 
 
 

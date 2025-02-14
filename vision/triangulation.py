@@ -44,10 +44,7 @@ def triangulate_point(
     """
     A = np.zeros((2 * len(observations), 4))
     for i,observation in enumerate(observations):
-        proj_matrix = camera_model.get_projection_matrix(
-            observation.odom_pos,
-            observation.odom_angle
-        )
+        proj_matrix = camera_model.get_projection_matrix(observation.odom_pose)
 
         assert point_id in observation.image_points,\
             f"One observation does not contain the point with id: {point_id}"

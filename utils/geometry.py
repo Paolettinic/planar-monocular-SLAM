@@ -1,6 +1,27 @@
 import numpy as np
 from numpy.typing import NDArray
 
+def compute_pose_error(xr_guess: NDArray, xr_true: NDArray):
+    assert xr_guess.shape == xr_true.shape
+    num_poses = xr_guess.shape[0]
+    xr_size = xr_guess.shape[1]
+    rel_t = np.zeros((num_poses - 1, xr_size, xr_size))
+    rel_gt = np.zeros((num_poses - 1, xr_size, xr_size))
+    for i in range(num_poses - 1):
+        rel_t[i] = np.linalg.inv(xr_guess[i]) @ xr_guess[i+1]
+        rel_gt[i] = np.linalg.inv(xr_true[i]) @ xr_true[i+1]
+    error = np.linalg.inv(rel_t) @ rel_gt
+    angle_error = np.atan2(error[:,1,0],error[:,0,0])
+    position_error = error[:,:2,2]
+
+    rmse_angle = np.sqrt(np.mean(angle_error ** 2))
+    rmse_position = np.sqrt(np.mean(position_error ** 2, axis=0))
+    return rmse_angle, rmse_position
+
+def compute_landmark_error(xl_guess: NDArray, xl_true: NDArray):
+    return np.sqrt(np.mean((xl_guess - xl_true)**2, axis=0))
+
+
 def v2t_se2(vector: NDArray) -> NDArray:
     """
     vector to transformation in se(2)
@@ -27,6 +48,12 @@ def v2t(vector: NDArray) -> NDArray:
 
 def se2_to_se3_vec(vector:NDArray) -> NDArray:
     return np.array([vector[0],vector[1], 0, 0, 0, vector[2]])
+
+def se2_to_se3(transformation: NDArray) -> NDArray:
+    se3_tranformation = np.eye(4)
+    se3_tranformation[:2,:2] = transformation[:2,:2]
+    se3_tranformation[:2, 3] = transformation[:2, 2]
+    return se3_tranformation
 
 def rotation_matrix(rvector: NDArray) -> NDArray:
     return rot_x(rvector[0]) @ rot_y(rvector[1]) @ rot_z(rvector[2])

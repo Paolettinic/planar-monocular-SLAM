@@ -1,6 +1,6 @@
 from typing import Tuple, List
 from numpy.typing import NDArray
-from utils.utils import d_rot_z_0_se2
+from utils.geometry import d_rot_z_0_se2
 import numpy as np
 
 def pose_error_and_jacobian(
@@ -56,7 +56,7 @@ def linearize_poses(
     size_dx_r: int,
     pose_association: List[Tuple[int, int]],
     kernel_threshold: float = 1e-1
-) -> Tuple[NDArray, NDArray, float]:
+) -> Tuple[NDArray, NDArray, float, int]:
     """
     Constructs the linearized system for the pose-pose constraint of the factor
     graph
@@ -78,6 +78,8 @@ def linearize_poses(
             - `NDArray`: The matrix `H` of the linearized system.
             - `NDArray`: The vector `b` of the linearized system.
             - `float`: Residual
+            - `int`: The number of inliers (measurements that fall within the
+                kernel threshold).
     """
     xr_size = size_dx_r * x_r.shape[0]
 
@@ -85,6 +87,7 @@ def linearize_poses(
     b = np.zeros(xr_size)
 
     chi = 0.0
+    num_inliers= 0
 
     for i, z_odom in enumerate(z):
         omega_pose = np.eye(6)
@@ -106,6 +109,8 @@ def linearize_poses(
         if chi_ > kernel_threshold:
             omega_pose *= np.sqrt(kernel_threshold / chi_)
             chi_ = kernel_threshold
+        else:
+            num_inliers += 1
         chi += chi_
 
         idx_pose_i = idx_i * size_dx_r
@@ -136,4 +141,4 @@ def linearize_poses(
             idx_pose_j : idx_pose_j + size_dx_r
         ] += j_xr_j.T @ omega_pose @ e
 
-    return h, b, float(chi)
+    return h, b, float(chi), num_inliers
