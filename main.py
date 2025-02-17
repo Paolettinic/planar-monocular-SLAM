@@ -127,7 +127,7 @@ def main(args) -> None:
 
     fig_odom, (ax1, ax2)= plt.subplots(1,2)
     fig_plots, ((ax3, ax4), (ax5, ax6))= plt.subplots(2,2)
-    fig_odom.set_size_inches(10, 10)
+    fig_odom.set_size_inches(10, 6)
     fig_plots.set_size_inches(10, 10)
 
     ax1.title.set_text("Odometry and GT")
