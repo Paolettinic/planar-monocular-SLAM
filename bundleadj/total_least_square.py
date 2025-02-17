@@ -99,15 +99,16 @@ def total_least_square(
         b = np.zeros(system_size)
         dx = np.zeros(system_size)
 
-        h_proj, b_proj, chi_proj_stat[i], inliers_proj[i] = linearize_projections(
-            x_r=x_r,
-            x_l=x_l,
-            z=z_proj,
-            size_dx_r=size_dx_r,
-            size_dx_l=size_dx_l,
-            proj_association=proj_association,
-            camera_model=camera_model
-        )
+        h_proj, b_proj, chi_proj_stat[i], inliers_proj[i] =\
+            linearize_projections(
+                x_r=x_r,
+                x_l=x_l,
+                z=z_proj,
+                size_dx_r=size_dx_r,
+                size_dx_l=size_dx_l,
+                proj_association=proj_association,
+                camera_model=camera_model
+            )
 
         h_pose, b_pose, chi_pose_stat[i], inliers_pose[i] = linearize_poses(
             x_r=x_r,
@@ -124,7 +125,6 @@ def total_least_square(
 
         h += np.eye(system_size) * damping
 
-
         # keep the first pose fixed
         dx[size_dx_r :] = -np.linalg.solve(
             h[size_dx_r :, size_dx_r :], b[size_dx_r :]
@@ -134,7 +134,7 @@ def total_least_square(
         t_iterations.set_postfix({"error":error})
         x_r, x_l = boxplus(x_r, x_l, size_dx_r, size_dx_l, dx)
 
-    return x_r, x_l, chi_pose_stat, chi_proj_stat, inliers_proj, inliers_pose
+    return x_r, x_l, chi_pose_stat, chi_proj_stat, inliers_pose, inliers_proj
 
 
 

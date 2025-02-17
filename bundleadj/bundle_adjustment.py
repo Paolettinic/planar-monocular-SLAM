@@ -7,12 +7,26 @@ from .total_least_square import total_least_square
 
 
 class BundleAdjustmentResult(NamedTuple):
+    """
+    Named Tuple containing:
+        - `NDArray`: The optimized robot poses (`x_r`).
+        - `NDArray`: The optimized landmark positions (`x_l`).
+        - `NDArray`: The history of pose residual over iterations.
+            (`chi_pose_stat`).
+        - `NDArray`: The history of projection residual over iterations.
+            (`chi_proj_stat`).
+        - `NDArray`: The number of inliers for projection constraints
+            (`proj_inliers`).
+        - `NDArray`: The number of inliers for pose constraints
+            (`pose_inliers`).
+        - `Dict[int, int]`: mapping from landmark IDs to indices in `x_l`.
+    """
     x_r: NDArray
     x_l: NDArray
     chi_pose_stat: NDArray
     chi_proj_stat: NDArray
-    proj_inliers: NDArray
     pose_inliers: NDArray
+    proj_inliers: NDArray
     point_to_index: Dict[int, int]
 
 
@@ -20,9 +34,24 @@ def bundle_adjustment(
     observations: List[Observation],
     triangulated_points: Dict[int, NDArray],
     cameramodel: CameraModel,
-    iterations: int = 5
+    iterations: int = 20
 ) -> BundleAdjustmentResult:
+    """
+    Prepares the factor graph and solve the system using Total Least Squares
 
+    Args:
+        - observations (`List[Observation]`): A list of observations, each
+            containing odometry poses and 2D image point measurements.
+        - triangulated_points (`Dict[int, NDArray]`): A dictionary mapping
+            landmark IDs to their estimated `3D` world coordinates.
+        - cameramodel (`CameraModel`): The camera model containing intrinsic
+            and extrinsic parameters.
+        - iterations (`int`, optional): The number of optimization iterations.
+            Defaults to `5`.
+
+    Returns:
+        `BundleAdjustmentResult`
+    """
     point_to_index = {}
 
     num_poses = len(observations)

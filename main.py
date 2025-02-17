@@ -7,15 +7,12 @@ import plotly.io as pio
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 import numpy as np
-
-
 import argparse
 import os
 import re
 
 pio.kaleido.scope.default_width=900
 pio.kaleido.scope.default_height=900
-
 
 BASE_DIRECTORY = os.path.dirname(os.path.abspath(__file__))
 DATA_DIRECTORY = os.path.join(BASE_DIRECTORY,"data")
@@ -72,12 +69,12 @@ def main(args) -> None:
     odom_poses = np.array([
         observation.odom_pose
         for observation in observations
-    ] )
+    ])
 
     true_poses = np.array([
         observation.true_pose
         for observation in observations
-    ] )
+    ])
 
     xl_true = np.zeros_like(result.x_l)
     xl_guess= np.zeros_like(result.x_l)
@@ -90,7 +87,11 @@ def main(args) -> None:
     landmark_error = compute_landmark_error(result.x_l, xl_true)
     print("Pose error")
     print(f"{'Rotation:':.<20}",f"{rmse_angle}")
-    print(f"{'Translation:':.<20}",f"x:{rmse_position[0]:.>20}",f"y:{rmse_position[1]}")
+    print(
+        f"{'Translation:':.<20}",
+        f"x:{rmse_position[0]:.>20}",
+        f"y:{rmse_position[1]}"
+    )
     print("Landmark_error")
     print("RMSE:",landmark_error[0], landmark_error[1], landmark_error[2])
 
