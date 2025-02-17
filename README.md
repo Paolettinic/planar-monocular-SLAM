@@ -1,5 +1,11 @@
 # Planar Monocular Slam
-Probabilistic Robotics Project
+Probabilistic Robotics Project:
+This repository implements a bundle adjustment system for optimizing robot
+poses and landmark positions. The optimization is performed using a total
+least squares, with odometry and projection constraints.
+The resulting graphs svg and an html page with a representation of the
+landmarks (see Results) can be found in the output directory,
+
 
 ## Instructions
 - \(OPTIONAL\) Create a conda environment
@@ -17,7 +23,9 @@ Probabilistic Robotics Project
     ```
 
 ## Results
+### Odometry, inliers and residual
 ![TLSresults](output/out.svg "Results")
+### Landmark visualization
 ![SCATTERresults](output/scatter.svg "Results")
 
 

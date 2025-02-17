@@ -90,7 +90,7 @@ def linearize_projections(
     size_dx_l: int,
     proj_association: List[Tuple[int, int]],
     camera_model: CameraModel,
-    kernel_threshold: float = 1e3
+    kernel_threshold: float = 1e2
 ) -> Tuple[NDArray, NDArray, float, int]:
     """
     Constructs the linearized system for the pose-projection constraint of the
@@ -108,7 +108,7 @@ def linearize_projections(
             was observed in pose n
         - camera_model (`CameraModel`): The camera model
         - kernel_threshold (`float`, optional): The threshold for the robust
-            kernel. Defaults to `1000`.
+            kernel. Defaults to `100`.
 
     Returns:
         `Tuple[NDArray, NDArray, float, int]`:
