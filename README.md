@@ -23,8 +23,10 @@ landmarks (see Results) can be found in the output directory,
     ```
 
 ## Results
-### Odometry, inliers and residual
-![TLSresults](output/out.svg "Results")
+### Odometry
+![TLSresults](output/odom.svg "Results")
+### Residuals and inliers
+![TLSresults](output/plot.svg "Results")
 ### Landmark visualization
 ![SCATTERresults](output/scatter.svg "Results")
 

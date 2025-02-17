@@ -125,8 +125,10 @@ def main(args) -> None:
         ],
     )
 
-    fig, ((ax1, ax2), (ax3, ax4), (ax5, ax6))= plt.subplots(3,2)
-    fig.set_size_inches(10, 10)
+    fig_odom, (ax1, ax2)= plt.subplots(1,2)
+    fig_plots, ((ax3, ax4), (ax5, ax6))= plt.subplots(2,2)
+    fig_odom.set_size_inches(10, 10)
+    fig_plots.set_size_inches(10, 10)
 
     ax1.title.set_text("Odometry and GT")
     ax1.quiver(
@@ -145,6 +147,7 @@ def main(args) -> None:
     )
     ax1.legend(["Odometry","Ground Truth"])
 
+    ax2.title.set_text("After optimization")
     ax2.quiver(
         odom_poses[:, 0, 2],
         odom_poses[:, 1, 2],
@@ -181,7 +184,8 @@ def main(args) -> None:
     ax6.set_yscale("log")
     ax6.plot(result.chi_proj_stat)
 
-    plt.savefig("output/out.svg", format="svg", dpi=80)
+    fig_odom.savefig("output/odom.svg", format="svg", dpi=80)
+    fig_plots.savefig("output/plot.svg", format="svg", dpi=80)
     plt.ion()
     plt.show(block=False)
     print("Optimization completed.")
