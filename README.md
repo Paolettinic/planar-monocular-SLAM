@@ -144,7 +144,7 @@ J_{proj}=\frac{d}{dp}\pi\Big|_{p=pcam} =
 ### Refinement of the initial solution
 The solution for the landmarks postition obtained after the optimization
 can be further refined simply by repeating the triangulation process,
-substiting the odometry poses with the pose obtained by total least squares.
+substituting the odometry poses with the one obtained by total least squares.
 This lead to an improved initial guess of the landmark position, which results
 in a better solution after another pass of TLS.
 
