@@ -39,10 +39,52 @@ def main(args) -> None:
 
     observations.sort(key=lambda x : x.sequence)
 
+    odom_poses = np.array([
+        observation.odom_pose
+        for observation in observations
+    ])
+
+    true_poses = np.array([
+        observation.true_pose
+        for observation in observations
+    ])
+
     p_world = world_from_file(WORLD_FILE)
     camera_model = CameraModel.from_file(CAMERA_FILE)
 
-    print(f"{'Triangulating points':.^80}\n")
+    print(f"{'Initial point triangulation':.^80}\n")
+
+
+    initial_p_triang = triangulate_points(
+        camera_model=camera_model,
+        observations=observations,
+        method=t_method
+    )
+    true_points = {k: v for k,v in p_world.items() if k in initial_p_triang}
+
+    if not initial_p_triang:
+        print("Couldn't triangulate any point")
+        return
+
+    print(f"{len(initial_p_triang)} points triangulated\n")
+
+    print(f"{'Bundle adjustment using total least square':.^80}\n")
+
+    result = bundle_adjustment(
+        observations=observations,
+        triangulated_points=initial_p_triang,
+        cameramodel=camera_model,
+        iterations=iterations
+    )
+    chi_pose_stat = result.chi_pose_stat
+    chi_proj_stat = result.chi_proj_stat
+    pose_inliers = result.pose_inliers
+    proj_inliers = result.proj_inliers
+
+    for i, observation in enumerate(observations):
+        observation.odom_pose = result.x_r[i]
+
+    print(f"{'Triangulating points with updated poses':.^80}\n")
 
     p_triang = triangulate_points(
         camera_model=camera_model,
@@ -65,22 +107,19 @@ def main(args) -> None:
         cameramodel=camera_model,
         iterations=iterations
     )
+    chi_pose_stat = np.append(chi_pose_stat, result.chi_pose_stat)
+    chi_proj_stat = np.append(chi_proj_stat, result.chi_proj_stat)
+    pose_inliers = np.append(pose_inliers, result.pose_inliers)
+    proj_inliers = np.append(proj_inliers, result.proj_inliers)
 
-    odom_poses = np.array([
-        observation.odom_pose
-        for observation in observations
-    ])
-
-    true_poses = np.array([
-        observation.true_pose
-        for observation in observations
-    ])
+    for i, observation in enumerate(observations):
+        observation.odom_pose = result.x_r[i]
 
     xl_true = np.zeros_like(result.x_l)
     xl_guess= np.zeros_like(result.x_l)
     for point in true_points:
         xl_true[result.point_to_index[point]] = true_points[point]
-        xl_guess[result.point_to_index[point]] = p_triang[point]
+        xl_guess[result.point_to_index[point]] = initial_p_triang[point]
 
     # Computing resulting error
     rmse_angle, rmse_position = compute_pose_error(result.x_r, true_poses)
@@ -172,17 +211,17 @@ def main(args) -> None:
     ax2.legend(["Odometry","Ground Truth","Optimized"])
 
     ax3.title.set_text("pose inliers")
-    ax3.plot(result.pose_inliers)
+    ax3.plot(pose_inliers)
 
     ax4.title.set_text("projection inliers")
-    ax4.plot(result.proj_inliers)
+    ax4.plot(proj_inliers)
 
     ax5.title.set_text("chi poses")
-    ax5.plot(result.chi_pose_stat)
+    ax5.plot(chi_pose_stat)
 
     ax6.title.set_text("chi projections")
     ax6.set_yscale("log")
-    ax6.plot(result.chi_proj_stat)
+    ax6.plot(chi_proj_stat)
 
     fig_odom.savefig("output/odom.svg", format="svg", dpi=80)
     fig_plots.savefig("output/plot.svg", format="svg", dpi=80)

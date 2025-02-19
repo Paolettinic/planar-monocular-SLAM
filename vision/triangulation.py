@@ -141,8 +141,8 @@ def triangulate_points_from_all_observations(
                 points[p] = []
             points[p].append(i)
 
-    # Filter out points visible in less than 4 observations
-    v_points = filter(lambda p: len(points[p]) >= 4, points)
+    # Filter out points visible in less than 2 observations
+    v_points = filter(lambda p: len(points[p]) >= 2, points)
 
     # Triangulate point from all observation where a correspondence appears
     for point in v_points:
