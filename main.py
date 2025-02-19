@@ -249,17 +249,9 @@ def main(args) -> None:
         "output/scatter.html",
     )
 
-
-
-
-
-
-
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-i", "--iterations", type=int, default=20)
+    parser.add_argument("-i", "--iterations", type=int, default=10)
     parser.add_argument("-m", "--method", type=str,choices=["all", "pair"],
                         default="all")
     args = parser.parse_args()
