@@ -52,6 +52,11 @@ def main(args) -> None:
     p_world = world_from_file(WORLD_FILE)
     camera_model = CameraModel.from_file(CAMERA_FILE)
 
+    """
+    Initial solution: triangulating points with noisy odometry and refining
+    the pose using TLS
+    """
+
     print(f"{'Initial point triangulation':.^80}\n")
 
 
@@ -83,6 +88,11 @@ def main(args) -> None:
 
     for i, observation in enumerate(observations):
         observation.odom_pose = result.x_r[i]
+
+    """
+    IMPROVED SOLUTION: Use the resulting pose state to obtain a better initial
+    guess of the landmark position, leading to a better result
+    """
 
     print(f"{'Triangulating points with updated poses':.^80}\n")
 
